@@ -43,3 +43,36 @@ export async function sendVerificationOTP(email: string, otp: string) {
     throw error;
   }
 }
+
+export async function sendPasswordResetOTP(email: string, otp: string) {
+  // If no SMTP user is provided, we can log the OTP to the console for development
+  if (!process.env.SMTP_USER) {
+    console.log(`[DEV MODE] Password Reset OTP for ${email}: ${otp}`);
+    return;
+  }
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || '"Lost & Found" <noreply@lostfound.in>',
+    to: email,
+    subject: "Password Reset - Lost & Found",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Password Reset Request</h2>
+        <p>We received a request to reset your password for your Lost & Found account. Please use the following One-Time Password (OTP) to reset your password:</p>
+        <div style="background-color: #f4f4f5; padding: 20px; border-radius: 8px; text-align: center; margin: 24px 0;">
+          <h1 style="margin: 0; letter-spacing: 4px; color: #059669;">${otp}</h1>
+        </div>
+        <p>This code will expire in 10 minutes.</p>
+        <p>If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+      </div>
+    `,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Password reset email sent: %s", info.messageId);
+  } catch (error) {
+    console.error("Error sending password reset email:", error);
+    throw error;
+  }
+}

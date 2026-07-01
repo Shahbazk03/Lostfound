@@ -23,7 +23,8 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
 
-  if (pathname === "/login" || pathname === "/register") {
+  const hiddenPaths = ["/login", "/register", "/forgot-password", "/reset-password"];
+  if (hiddenPaths.includes(pathname)) {
     return null;
   }
 
