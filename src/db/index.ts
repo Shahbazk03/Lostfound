@@ -8,7 +8,15 @@ if (!databaseUrl) {
 }
 
 // Fix for the pg-connection-string deprecation warning on Vercel
-const connectionString = databaseUrl.replace("sslmode=require", "sslmode=verify-full");
+let connectionString = databaseUrl;
+if (connectionString.includes("sslmode=require")) {
+  connectionString = connectionString.replace("sslmode=require", "sslmode=verify-full");
+}
+
+// Vercel Postgres sets PGSSLMODE=require as an environment variable, which pg reads directly
+if (process.env.PGSSLMODE === "require") {
+  process.env.PGSSLMODE = "verify-full";
+}
 
 const globalForDb = globalThis as typeof globalThis & {
   __arenaNextJsPostgresqlPool?: Pool;
