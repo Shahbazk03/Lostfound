@@ -3,12 +3,16 @@ import { db } from "@/db";
 import { messages, users, items } from "@/db/schema";
 import { requireAuth } from "@/lib/auth";
 import { eq, desc, and, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
     const { searchParams } = new URL(request.url);
     const itemId = searchParams.get("itemId");
+
+    const sender = alias(users, "sender");
+    const receiver = alias(users, "receiver");
 
     if (itemId) {
       const results = await db
@@ -18,15 +22,29 @@ export async function GET(request: NextRequest) {
           read: messages.read,
           createdAt: messages.createdAt,
           senderId: messages.senderId,
-          senderName: users.name,
+          senderName: sender.name,
+          senderAvatar: sender.avatar,
           receiverId: messages.receiverId,
+          receiverName: receiver.name,
+          receiverAvatar: receiver.avatar,
         })
         .from(messages)
-        .leftJoin(users, eq(messages.senderId, users.id))
+        .leftJoin(sender, eq(messages.senderId, sender.id))
+        .leftJoin(receiver, eq(messages.receiverId, receiver.id))
         .where(eq(messages.itemId, parseInt(itemId)))
         .orderBy(desc(messages.createdAt));
 
-      return NextResponse.json({ messages: results });
+      const formattedMessages = results.map((msg) => {
+        const isMeSender = msg.senderId === user.id;
+        return {
+          ...msg,
+          otherUserId: isMeSender ? msg.receiverId : msg.senderId,
+          otherUserName: isMeSender ? msg.receiverName : msg.senderName,
+          otherUserAvatar: isMeSender ? msg.receiverAvatar : msg.senderAvatar,
+        };
+      });
+
+      return NextResponse.json({ messages: formattedMessages });
     }
 
     // Get all conversations for user
@@ -37,13 +55,18 @@ export async function GET(request: NextRequest) {
         read: messages.read,
         createdAt: messages.createdAt,
         senderId: messages.senderId,
-        senderName: users.name,
+        senderName: sender.name,
+        senderAvatar: sender.avatar,
         receiverId: messages.receiverId,
+        receiverName: receiver.name,
+        receiverAvatar: receiver.avatar,
         itemId: messages.itemId,
         itemTitle: items.title,
+        itemPhotos: items.photos,
       })
       .from(messages)
-      .leftJoin(users, eq(messages.senderId, users.id))
+      .leftJoin(sender, eq(messages.senderId, sender.id))
+      .leftJoin(receiver, eq(messages.receiverId, receiver.id))
       .leftJoin(items, eq(messages.itemId, items.id))
       .where(
         or(
@@ -53,7 +76,19 @@ export async function GET(request: NextRequest) {
       )
       .orderBy(desc(messages.createdAt));
 
-    return NextResponse.json({ messages: results });
+    // Format the response to make it easy for the frontend to identify the "other user"
+    const formattedMessages = results.map((msg) => {
+      const isMeSender = msg.senderId === user.id;
+      return {
+        ...msg,
+        otherUserId: isMeSender ? msg.receiverId : msg.senderId,
+        otherUserName: isMeSender ? msg.receiverName : msg.senderName,
+        otherUserAvatar: isMeSender ? msg.receiverAvatar : msg.senderAvatar,
+        itemPhoto: msg.itemPhotos && msg.itemPhotos.length > 0 ? msg.itemPhotos[0] : null,
+      };
+    });
+
+    return NextResponse.json({ messages: formattedMessages });
   } catch (error) {
     console.error("Get messages error:", error);
     if (error instanceof Error && error.message === "Unauthorized") {

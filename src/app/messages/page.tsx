@@ -25,10 +25,13 @@ interface Message {
   read: boolean;
   createdAt: string;
   senderId: number;
-  senderName: string | null;
   receiverId: number;
   itemId: number;
   itemTitle: string | null;
+  itemPhoto?: string | null;
+  otherUserId?: number;
+  otherUserName?: string | null;
+  otherUserAvatar?: string | null;
   isLocked?: boolean;
 }
 
@@ -81,7 +84,7 @@ export default function MessagesPage() {
 
   const filteredGroups = Object.entries(groupedMessages).filter(([_, msgs]) => {
     const lastMsg = msgs[msgs.length - 1];
-    const searchStr = `${lastMsg.itemTitle} ${lastMsg.senderName}`.toLowerCase();
+    const searchStr = `${lastMsg.itemTitle} ${lastMsg.otherUserName}`.toLowerCase();
     return searchStr.includes(searchQuery.toLowerCase());
   });
 
@@ -225,17 +228,31 @@ export default function MessagesPage() {
                     isSelected ? "bg-slate-100 dark:bg-slate-800/80" : ""
                   }`}
                 >
-                  <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/20">
-                    <User className="w-6 h-6 text-emerald-400" />
+                  <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/20 overflow-hidden relative">
+                    {lastMsg.otherUserAvatar ? (
+                      <img src={lastMsg.otherUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold text-lg">
+                        {lastMsg.otherUserName ? lastMsg.otherUserName.charAt(0).toUpperCase() : "U"}
+                      </span>
+                    )}
+                    {lastMsg.itemPhoto && (
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-slate-200">
+                        <img src={lastMsg.itemPhoto} alt="Item" className="w-full h-full object-cover" />
+                      </div>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0 flex flex-col justify-center text-left">
                     <div className="flex justify-between items-baseline mb-1">
                       <h2 className="font-semibold text-slate-900 dark:text-white truncate pr-2">
-                        {lastMsg.itemTitle || "Unknown Item"}
+                        {lastMsg.otherUserName || "Unknown User"}
                       </h2>
                       <span className="text-xs text-slate-600 dark:text-slate-400 shrink-0">
                         {new Date(lastMsg.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                       </span>
+                    </div>
+                    <div className="text-xs text-emerald-600 dark:text-emerald-400 truncate mb-0.5">
+                      {lastMsg.itemTitle || "Unknown Item"}
                     </div>
                     <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 truncate">
                       {isMeLast && <CheckCheck className="w-4 h-4 text-emerald-500 shrink-0" />}
@@ -262,19 +279,31 @@ export default function MessagesPage() {
                 >
                   <ArrowLeft className="w-6 h-6" />
                 </button>
-                <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
-                  <User className="w-5 h-5 text-emerald-400" />
+                <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20 overflow-hidden">
+                  {selectedConversation[0].otherUserAvatar ? (
+                    <img src={selectedConversation[0].otherUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                      {selectedConversation[0].otherUserName ? selectedConversation[0].otherUserName.charAt(0).toUpperCase() : "U"}
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-col">
                   <span className="font-semibold text-slate-900 dark:text-white leading-tight">
-                    {selectedConversation[0].itemTitle || "Unknown Item"}
+                    {selectedConversation[0].otherUserName || "Unknown User"}
                   </span>
-                  <Link
-                    href={`/items/${selectedConversation[0].itemId}`}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 hover:underline leading-tight"
-                  >
-                    View Item Details
-                  </Link>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-slate-500">
+                      {selectedConversation[0].itemTitle || "Unknown Item"}
+                    </span>
+                    <span className="text-xs text-slate-300 dark:text-slate-700">•</span>
+                    <Link
+                      href={`/items/${selectedConversation[0].itemId}`}
+                      className="text-xs text-emerald-500 hover:text-emerald-400 hover:underline leading-tight"
+                    >
+                      View Item Details
+                    </Link>
+                  </div>
                 </div>
               </div>
               <button className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white p-2"><MoreVertical className="w-5 h-5" /></button>
