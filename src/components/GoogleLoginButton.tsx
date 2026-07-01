@@ -13,7 +13,7 @@ export function GoogleLoginButton({ action, variant = "default" }: { action: "lo
     ? "flex items-center justify-center w-10 h-10 bg-white border border-slate-300 rounded-full hover:bg-slate-50 transition-colors"
     : variant === "navbar"
     ? "flex items-center justify-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-full text-sm font-medium hover:bg-slate-50 transition-colors"
-    : "w-full flex items-center justify-center gap-3 bg-white border border-slate-300 text-slate-700 py-2.5 rounded-lg font-medium hover:bg-slate-50 transition-colors mb-4";
+    : "w-full flex items-center justify-center gap-3 bg-white border border-slate-300 text-slate-700 py-2.5 rounded-lg font-medium hover:bg-slate-50 transition-colors";
 
   return (
     <button
