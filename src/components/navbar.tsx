@@ -43,14 +43,16 @@ export function Navbar() {
             <div className="hidden md:flex items-center gap-6">
               <Link
                 href="/browse"
-                className="text-sm font-medium text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 transition-colors"
+                className="text-sm font-medium text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 transition-colors flex items-center gap-1.5"
               >
+                <Search className="w-4 h-4" />
                 Browse Items
               </Link>
               <Link
                 href="/report"
-                className="text-sm font-medium text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 transition-colors"
+                className="text-sm font-medium text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 transition-colors flex items-center gap-1.5"
               >
+                <PlusCircle className="w-4 h-4" />
                 Report Item
               </Link>
               <Link
@@ -98,9 +100,20 @@ export function Navbar() {
                   </Link>
                 )}
                 <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
-                  <span className="text-sm text-slate-900 dark:text-slate-200 font-medium">
-                    {user.name}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center overflow-hidden border border-emerald-200 dark:border-emerald-800">
+                      {user.avatar ? (
+                        <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-emerald-700 dark:text-emerald-400 text-xs font-bold">
+                          {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm text-slate-900 dark:text-slate-200 font-medium">
+                      {user.name}
+                    </span>
+                  </div>
                   <button
                     onClick={() => logout()}
                     className="text-sm text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 transition-colors flex items-center gap-1"
