@@ -182,8 +182,12 @@ export default function MessagesPage() {
         {/* Sidebar Header */}
         <div className="h-[60px] bg-white/60 dark:bg-slate-900/40 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800/50 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-slate-900 dark:text-white font-bold shadow-lg shadow-emerald-500/20">
-              {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+            <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-slate-900 dark:text-white font-bold shadow-lg shadow-emerald-500/20 overflow-hidden">
+              {user.avatar ? (
+                <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                user.name ? user.name.charAt(0).toUpperCase() : "U"
+              )}
             </div>
             <h1 className="font-bold text-slate-900 dark:text-white text-lg">Chats</h1>
           </div>

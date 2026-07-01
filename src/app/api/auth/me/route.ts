@@ -15,6 +15,7 @@ export async function GET() {
         phone: user.phone,
         role: user.role,
         verified: user.verified,
+        avatar: user.avatar,
       },
     });
   } catch {

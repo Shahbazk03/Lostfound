@@ -13,6 +13,7 @@ interface User {
   email: string;
   name: string;
   role: string;
+  avatar?: string | null;
 }
 
 interface AuthContextType {
