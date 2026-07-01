@@ -7,7 +7,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Search, Eye, EyeOff } from "lucide-react";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
-import { GithubLoginButton } from "@/components/GithubLoginButton";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -134,10 +133,7 @@ export default function LoginPage() {
             <div className="flex-grow border-t border-slate-200"></div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <GoogleLoginButton action="login" />
-            <GithubLoginButton action="login" />
-          </div>
+          <GoogleLoginButton action="login" />
 
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">

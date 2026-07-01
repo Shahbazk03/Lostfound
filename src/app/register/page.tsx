@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Search, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
-import { GithubLoginButton } from "@/components/GithubLoginButton";
 
 export default function RegisterPage() {
   const { register, verifyOTP } = useAuth();
@@ -332,10 +331,7 @@ export default function RegisterPage() {
             <div className="flex-grow border-t border-slate-200"></div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <GoogleLoginButton action="register" />
-            <GithubLoginButton action="register" />
-          </div>
+          <GoogleLoginButton action="register" />
 
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">
