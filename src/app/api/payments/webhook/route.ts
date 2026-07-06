@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
                 stripeSubscriptionId: subscriptionId,
                 stripeCustomerId: customerId,
                 status: subscription.status as any,
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                currentPeriodEnd: new Date((subscription as Stripe.Subscription).current_period_end * 1000),
                 updatedAt: new Date(),
               })
               .where(eq(userSubscriptions.userId, userId));
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
               stripeCustomerId: customerId,
               status: subscription.status as any,
               plan: "premium",
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+              currentPeriodEnd: new Date((subscription as Stripe.Subscription).current_period_end * 1000),
             });
           }
         } else if (type === "conversation_unlock") {
