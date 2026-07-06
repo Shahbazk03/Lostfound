@@ -28,6 +28,12 @@ export const withdrawalStatusEnum = pgEnum("withdrawal_status", [
   "completed",
   "rejected",
 ]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "active",
+  "canceled",
+  "past_due",
+  "incomplete",
+]);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -168,3 +174,33 @@ export const gameRewards = pgTable("game_rewards", {
 
 export type GameReward = typeof gameRewards.$inferSelect;
 export type NewGameReward = typeof gameRewards.$inferInsert;
+
+export const userSubscriptions = pgTable("user_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }).notNull(),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }).notNull(),
+  status: subscriptionStatusEnum("status").default("active").notNull(),
+  plan: varchar("plan", { length: 50 }).notNull(),
+  currentPeriodEnd: timestamp("current_period_end").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const unlockedConversations = pgTable("unlocked_conversations", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => items.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
+export type NewUserSubscription = typeof userSubscriptions.$inferInsert;
+export type UnlockedConversation = typeof unlockedConversations.$inferSelect;
+export type NewUnlockedConversation = typeof unlockedConversations.$inferInsert;

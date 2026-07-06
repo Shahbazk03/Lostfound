@@ -2,8 +2,8 @@ import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { users, userSubscriptions } from "@/db/schema";
+import { eq, and, gt } from "drizzle-orm";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "lost-and-found-secret-key-2026"
@@ -57,7 +57,21 @@ export async function getCurrentUser() {
     .where(eq(users.id, payload.userId))
     .limit(1);
 
-  return user[0] || null;
+  if (!user[0]) return null;
+
+  const subscription = await db
+    .select()
+    .from(userSubscriptions)
+    .where(
+      and(
+        eq(userSubscriptions.userId, user[0].id),
+        eq(userSubscriptions.status, "active"),
+        gt(userSubscriptions.currentPeriodEnd, new Date())
+      )
+    )
+    .limit(1);
+
+  return { ...user[0], hasSubscription: subscription.length > 0 };
 }
 
 export async function requireAuth() {

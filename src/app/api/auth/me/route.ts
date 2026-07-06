@@ -16,6 +16,7 @@ export async function GET() {
         role: user.role,
         verified: user.verified,
         avatar: user.avatar,
+        hasSubscription: user.hasSubscription,
       },
     });
   } catch {

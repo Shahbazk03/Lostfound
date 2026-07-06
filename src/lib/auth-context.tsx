@@ -14,6 +14,7 @@ interface User {
   name: string;
   role: string;
   avatar?: string | null;
+  hasSubscription?: boolean;
 }
 
 interface AuthContextType {

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, userSubscriptions } from "@/db/schema";
 import { verifyPassword, createToken, setAuthCookie } from "@/lib/auth";
-import { eq } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,20 +16,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await db
+    const userResult = await db
       .select()
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
 
-    if (user.length === 0) {
+    if (userResult.length === 0) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
       );
     }
 
-    const validPassword = await verifyPassword(password, user[0].password);
+    const user = userResult[0];
+
+    const validPassword = await verifyPassword(password, user.password);
     if (!validPassword) {
       return NextResponse.json(
         { error: "Invalid credentials" },
@@ -38,20 +40,34 @@ export async function POST(request: NextRequest) {
     }
 
     const token = await createToken({
-      userId: user[0].id,
-      email: user[0].email,
-      role: user[0].role,
+      userId: user.id,
+      email: user.email,
+      role: user.role,
     });
+
+    const subscription = await db
+      .select()
+      .from(userSubscriptions)
+      .where(
+        and(
+          eq(userSubscriptions.userId, user.id),
+          eq(userSubscriptions.status, "active"),
+          gt(userSubscriptions.currentPeriodEnd, new Date())
+        )
+      )
+      .limit(1);
 
     await setAuthCookie(token);
 
     return NextResponse.json({
+      token,
       user: {
-        id: user[0].id,
-        email: user[0].email,
-        name: user[0].name,
-        role: user[0].role,
-        avatar: user[0].avatar,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatar: user.avatar,
+        hasSubscription: subscription.length > 0,
       },
     });
   } catch (error) {

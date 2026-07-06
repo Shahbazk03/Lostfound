@@ -54,9 +54,13 @@ function ItemDetailContent() {
   const { settings } = useSettings();
   const [item, setItem] = useState<ItemDetail | null>(null);
   const [hasUnlocked, setHasUnlocked] = useState(false);
+  const [hasUnlockedChat, setHasUnlockedChat] = useState(false);
   const [loading, setLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [chatPaymentLoading, setChatPaymentLoading] = useState(false);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [messageContent, setMessageContent] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -80,6 +84,7 @@ function ItemDetailContent() {
         if (res.ok) {
           setItem(data.item);
           setHasUnlocked(data.hasUnlocked);
+          setHasUnlockedChat(data.hasUnlockedChat);
           if (data.item.unlockAmount) {
             setEditPriceValue((data.item.unlockAmount / 100).toFixed(2));
           }
@@ -116,6 +121,52 @@ function ItemDetailContent() {
       // ignore
     } finally {
       setPaymentLoading(false);
+    }
+  };
+
+  const handleUnlockChat = async () => {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    setChatPaymentLoading(true);
+    try {
+      const res = await fetch("/api/payments/unlock-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.sessionUrl) {
+        window.location.assign(data.sessionUrl);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setChatPaymentLoading(false);
+    }
+  };
+
+  const handleSubscribe = async () => {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    setSubscriptionLoading(true);
+    try {
+      const res = await fetch("/api/payments/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.sessionUrl) {
+        window.location.assign(data.sessionUrl);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSubscriptionLoading(false);
     }
   };
 
@@ -502,12 +553,25 @@ function ItemDetailContent() {
                       router.push("/login");
                       return;
                     }
-                    setShowMessageModal(true);
+                    if (hasUnlockedChat || user.hasSubscription) {
+                      setShowMessageModal(true);
+                    } else {
+                      setShowUnlockModal(true);
+                    }
                   }}
                   className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white py-2.5 rounded-lg font-medium hover:bg-slate-800 transition-colors"
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  Send Message
+                  {hasUnlockedChat || user?.hasSubscription ? (
+                    <>
+                      <MessageSquare className="w-4 h-4" />
+                      Send Message
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      Unlock to Message
+                    </>
+                  )}
                 </button>
               )}
             </div>
@@ -607,6 +671,78 @@ function ItemDetailContent() {
             className="max-w-full max-h-[90vh] object-contain rounded-lg"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {/* Unlock Chat Modal */}
+      {showUnlockModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900">
+                Unlock Messaging
+              </h3>
+              <button
+                onClick={() => setShowUnlockModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <p className="text-sm text-slate-600 mb-6">
+              To keep our community safe and prevent spam, messaging requires a small fee or an active subscription.
+            </p>
+
+            <div className="space-y-4">
+              {/* Option 1: One-time Unlock */}
+              <div className="border border-slate-200 rounded-xl p-5 hover:border-emerald-500 transition-colors">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="font-semibold text-slate-900">One-Time Unlock</h4>
+                    <p className="text-sm text-slate-500">Unlock messaging for this item only</p>
+                  </div>
+                  <div className="font-bold text-lg text-emerald-600">$1.00</div>
+                </div>
+                <button
+                  onClick={handleUnlockChat}
+                  disabled={chatPaymentLoading}
+                  className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-900 text-white py-2.5 rounded-lg font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+                >
+                  {chatPaymentLoading ? (
+                    <LoadingLogo className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Unlock this Chat"
+                  )}
+                </button>
+              </div>
+
+              {/* Option 2: Subscription */}
+              <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-5">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="font-semibold text-emerald-900">LostFound Premium</h4>
+                    <p className="text-sm text-emerald-700">Unlimited messaging across all items</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-emerald-600">$4.99</div>
+                    <div className="text-xs text-emerald-700 uppercase tracking-wide">/ month</div>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSubscribe}
+                  disabled={subscriptionLoading}
+                  className="w-full mt-4 flex items-center justify-center gap-2 bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  {subscriptionLoading ? (
+                    <LoadingLogo className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Subscribe Now"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { items, users, payments } from "@/db/schema";
+import { items, users, payments, unlockedConversations } from "@/db/schema";
 import { getCurrentUser, requireAuth } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
 
@@ -49,9 +49,12 @@ export async function GET(
 
     // Check if user has paid for precise location
     let hasUnlocked = false;
+    let hasUnlockedChat = false;
+    
     if (user) {
       if (item.userId === user.id || user.role === "admin") {
         hasUnlocked = true;
+        hasUnlockedChat = true;
       } else {
         const paymentRecord = await db
           .select()
@@ -65,6 +68,18 @@ export async function GET(
           )
           .limit(1);
         hasUnlocked = paymentRecord.length > 0;
+        
+        const chatUnlockRecord = await db
+          .select()
+          .from(unlockedConversations)
+          .where(
+            and(
+              eq(unlockedConversations.userId, user.id),
+              eq(unlockedConversations.itemId, itemId)
+            )
+          )
+          .limit(1);
+        hasUnlockedChat = chatUnlockRecord.length > 0;
       }
     }
 
@@ -73,7 +88,7 @@ export async function GET(
       (item as Record<string, unknown>).preciseLocation = null;
     }
 
-    return NextResponse.json({ item, hasUnlocked });
+    return NextResponse.json({ item, hasUnlocked, hasUnlockedChat });
   } catch (error) {
     console.error("Get item error:", error);
     return NextResponse.json(

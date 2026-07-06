@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, verificationTokens } from "@/db/schema";
+import { users, verificationTokens, userSubscriptions } from "@/db/schema";
 import { createToken, setAuthCookie } from "@/lib/auth";
 import { eq, and, gt } from "drizzle-orm";
 
@@ -64,21 +64,36 @@ export async function POST(request: NextRequest) {
       .where(eq(verificationTokens.id, validTokens[0].id));
 
     // Log the user in
-    const token = await createToken({
+    const jwt = await createToken({
       userId: user.id,
       email: user.email,
       role: user.role,
     });
 
-    await setAuthCookie(token);
+    const subscription = await db
+      .select()
+      .from(userSubscriptions)
+      .where(
+        and(
+          eq(userSubscriptions.userId, user.id),
+          eq(userSubscriptions.status, "active"),
+          gt(userSubscriptions.currentPeriodEnd, new Date())
+        )
+      )
+      .limit(1);
+
+    await setAuthCookie(jwt);
 
     return NextResponse.json({
+      message: "Email verified successfully",
+      token: jwt,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
         avatar: user.avatar,
+        hasSubscription: subscription.length > 0,
       },
     });
   } catch (error) {

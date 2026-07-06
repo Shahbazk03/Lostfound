@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { messages, users, items } from "@/db/schema";
+import { messages, users, items, unlockedConversations, userSubscriptions } from "@/db/schema";
 import { requireAuth } from "@/lib/auth";
-import { eq, desc, and, or } from "drizzle-orm";
+import { eq, desc, and, or, gt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export async function GET(request: NextRequest) {
@@ -113,13 +113,51 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    
+    // Check if user is admin, owner of item, has active subscription, or unlocked the chat
+    const parsedItemId = parseInt(itemId);
+    
+    const item = await db.select().from(items).where(eq(items.id, parsedItemId)).limit(1);
+    const isOwner = item.length > 0 && item[0].userId === user.id;
+    
+    if (user.role !== "admin" && !isOwner) {
+      const subscription = await db
+        .select()
+        .from(userSubscriptions)
+        .where(
+          and(
+            eq(userSubscriptions.userId, user.id),
+            eq(userSubscriptions.status, "active"),
+            gt(userSubscriptions.currentPeriodEnd, new Date())
+          )
+        )
+        .limit(1);
+        
+      const chatUnlockRecord = await db
+        .select()
+        .from(unlockedConversations)
+        .where(
+          and(
+            eq(unlockedConversations.userId, user.id),
+            eq(unlockedConversations.itemId, parsedItemId)
+          )
+        )
+        .limit(1);
+        
+      if (subscription.length === 0 && chatUnlockRecord.length === 0) {
+        return NextResponse.json(
+          { error: "You must subscribe or unlock to send messages." },
+          { status: 403 }
+        );
+      }
+    }
 
     const newMessage = await db
       .insert(messages)
       .values({
         senderId: user.id,
         receiverId: parseInt(receiverId),
-        itemId: parseInt(itemId),
+        itemId: parsedItemId,
         content,
       })
       .returning();
