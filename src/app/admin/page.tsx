@@ -387,6 +387,7 @@ export default function AdminDashboard() {
     { id: "users", label: "Users", icon: Users },
     { id: "items", label: "Items", icon: Package },
     { id: "messages", label: "Messages", icon: MessageSquare },
+    { id: "payments", label: "Payments", icon: DollarSign },
     { id: "withdrawals", label: "Withdrawals", icon: Banknote },
     { id: "founder", label: "Founder", icon: Shield },
     { id: "content", label: "Content", icon: FileText },
@@ -630,6 +631,53 @@ export default function AdminDashboard() {
                 </motion.div>
               )}
 
+              {activeTab === "payments" && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center bg-white dark:bg-slate-800 dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 dark:border-slate-800">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white dark:text-white">Payment Configurations</h3>
+                      <p className="text-slate-500 text-sm">Manage unlock fees and premium subscription pricing.</p>
+                    </div>
+                    <button onClick={() => settings && setEditingSettings(settings)} disabled={!settings} className="bg-emerald-50 text-emerald-700 px-5 py-2.5 rounded-xl hover:bg-emerald-100 hover:shadow transition-all flex items-center gap-2 font-semibold">
+                      <Edit className="w-4 h-4" /> Edit Fees
+                    </button>
+                  </div>
+
+                  {settings ? (
+                    <div className="bg-white dark:bg-slate-800 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/50 dark:border-slate-700/50 p-8 shadow-sm max-w-3xl">
+                      <div className="grid md:grid-cols-2 gap-y-8 gap-x-12">
+                        <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center gap-3 mb-4 text-emerald-600">
+                            <MessageSquare className="w-6 h-6" />
+                            <h4 className="font-semibold text-slate-900 dark:text-white">One-Time Unlock</h4>
+                          </div>
+                          <div className="text-sm text-slate-500 mb-2">Current Fee</div>
+                          <div className="text-3xl font-bold text-slate-900 dark:text-white">
+                            {formatCurrency(settings.metadata?.oneTimeUnlockFee || 100, settings.currency || "USD")}
+                          </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center gap-3 mb-4 text-emerald-600">
+                            <Shield className="w-6 h-6" />
+                            <h4 className="font-semibold text-slate-900 dark:text-white">Premium Subscription</h4>
+                          </div>
+                          <div className="text-sm text-slate-500 mb-2">Current Monthly Fee</div>
+                          <div className="text-3xl font-bold text-slate-900 dark:text-white flex items-end gap-2">
+                            {formatCurrency(settings.metadata?.premiumSubscriptionFee || 499, settings.currency || "USD")}
+                            <span className="text-sm font-medium text-slate-500 mb-1">/ month</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl text-center shadow-sm max-w-3xl border border-slate-100 dark:border-slate-800">
+                      <DollarSign className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                      <p className="text-slate-500">Settings not configured yet. Please configure organization settings first.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeTab === "founder" && (
                 <div className="space-y-6">
                   <div className="flex justify-between items-center bg-white dark:bg-slate-800 dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 dark:border-slate-800">
@@ -852,17 +900,6 @@ export default function AdminDashboard() {
                         <div>
                           <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Country</div>
                           <div className="text-lg font-medium text-slate-900 dark:text-white dark:text-white flex items-center gap-2"><MapPin className="w-4 h-4 text-slate-600 dark:text-slate-400" /> {settings.country || "-"}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 grid md:grid-cols-2 gap-y-8 gap-x-12">
-                        <div>
-                          <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">One-Time Unlock Fee</div>
-                          <div className="text-lg font-medium text-slate-900 dark:text-white dark:text-white">{formatCurrency(settings.metadata?.oneTimeUnlockFee || 100, settings.currency || "USD")}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Premium Subscription Fee</div>
-                          <div className="text-lg font-medium text-slate-900 dark:text-white dark:text-white">{formatCurrency(settings.metadata?.premiumSubscriptionFee || 499, settings.currency || "USD")} / month</div>
                         </div>
                       </div>
                     </>
