@@ -831,8 +831,9 @@ export default function AdminDashboard() {
                     </div>
 
                     {settings ? (
-                      <div className="grid md:grid-cols-2 gap-y-8 gap-x-12">
-                        <div>
+                      <>
+                        <div className="grid md:grid-cols-2 gap-y-8 gap-x-12">
+                          <div>
                           <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Organization Name</div>
                           <div className="text-lg font-medium text-slate-900 dark:text-white dark:text-white">{settings.organizationName}</div>
                         </div>
@@ -853,6 +854,18 @@ export default function AdminDashboard() {
                           <div className="text-lg font-medium text-slate-900 dark:text-white dark:text-white flex items-center gap-2"><MapPin className="w-4 h-4 text-slate-600 dark:text-slate-400" /> {settings.country || "-"}</div>
                         </div>
                       </div>
+                      
+                      <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 grid md:grid-cols-2 gap-y-8 gap-x-12">
+                        <div>
+                          <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">One-Time Unlock Fee</div>
+                          <div className="text-lg font-medium text-slate-900 dark:text-white dark:text-white">{formatCurrency(settings.metadata?.oneTimeUnlockFee || 100, settings.currency || "USD")}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Premium Subscription Fee</div>
+                          <div className="text-lg font-medium text-slate-900 dark:text-white dark:text-white">{formatCurrency(settings.metadata?.premiumSubscriptionFee || 499, settings.currency || "USD")} / month</div>
+                        </div>
+                      </div>
+                    </>
                     ) : (
                       <div className="text-center py-10">
                         <Settings className="w-12 h-12 text-slate-200 mx-auto mb-3" />
@@ -971,6 +984,20 @@ export default function AdminDashboard() {
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 dark:text-slate-300 mb-1.5">Country</label>
                         <input type="text" value={editingSettings.country || ""} onChange={(e) => setEditingSettings({ ...editingSettings, country: e.target.value })} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 dark:border-slate-700/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:bg-slate-800 dark:bg-slate-800 outline-none transition-all" />
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 mt-4">
+                      <h4 className="text-md font-bold text-slate-900 dark:text-white dark:text-white mb-4">Payment Settings</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 dark:text-slate-300 mb-1.5">One-Time Unlock Fee (in cents)</label>
+                          <input type="number" min="0" value={editingSettings.metadata?.oneTimeUnlockFee || 100} onChange={(e) => setEditingSettings({ ...editingSettings, metadata: { ...editingSettings.metadata, oneTimeUnlockFee: parseInt(e.target.value) || 0 } })} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 dark:border-slate-700/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:bg-slate-800 dark:bg-slate-800 outline-none transition-all" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 dark:text-slate-300 mb-1.5">Premium Subscription Fee (in cents)</label>
+                          <input type="number" min="0" value={editingSettings.metadata?.premiumSubscriptionFee || 499} onChange={(e) => setEditingSettings({ ...editingSettings, metadata: { ...editingSettings.metadata, premiumSubscriptionFee: parseInt(e.target.value) || 0 } })} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 dark:border-slate-700/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:bg-slate-800 dark:bg-slate-800 outline-none transition-all" />
+                        </div>
                       </div>
                     </div>
                     

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createConversationUnlockSession } from "@/lib/stripe";
+import { db } from "@/db";
+import { organizationSettings } from "@/db/schema";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,9 +17,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Item ID is required" }, { status: 400 });
     }
 
+    const settings = await db.select().from(organizationSettings).limit(1);
+    const amount = settings.length > 0 && settings[0].metadata?.oneTimeUnlockFee 
+      ? Number(settings[0].metadata.oneTimeUnlockFee) 
+      : 100;
+    const currency = settings.length > 0 && settings[0].currency ? settings[0].currency : "usd";
+
     const sessionUrl = await createConversationUnlockSession({
       userId: user.id,
       itemId,
+      amount,
+      currency,
     });
 
     if (!sessionUrl) {

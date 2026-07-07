@@ -52,9 +52,13 @@ export async function createMessageUnlockSession({
 export async function createConversationUnlockSession({
   userId,
   itemId,
+  amount,
+  currency = "usd",
 }: {
   userId: number;
   itemId: number;
+  amount: number;
+  currency?: string;
 }): Promise<string | null> {
   if (!stripe) {
     throw new Error("Stripe is not configured");
@@ -65,12 +69,12 @@ export async function createConversationUnlockSession({
     line_items: [
       {
         price_data: {
-          currency: "usd",
+          currency: currency.toLowerCase(),
           product_data: {
             name: "Unlock Chat",
             description: "Unlock messaging for this item",
           },
-          unit_amount: UNLOCK_AMOUNT,
+          unit_amount: amount,
         },
         quantity: 1,
       },
@@ -91,9 +95,13 @@ export async function createConversationUnlockSession({
 export async function createSubscriptionSession({
   userId,
   itemId,
+  amount,
+  currency = "usd",
 }: {
   userId: number;
   itemId?: number;
+  amount: number;
+  currency?: string;
 }): Promise<string | null> {
   if (!stripe) {
     throw new Error("Stripe is not configured");
@@ -104,12 +112,12 @@ export async function createSubscriptionSession({
     line_items: [
       {
         price_data: {
-          currency: "usd",
+          currency: currency.toLowerCase(),
           product_data: {
             name: "LostFound Premium",
             description: "Unlimited messaging subscription",
           },
-          unit_amount: SUBSCRIPTION_AMOUNT,
+          unit_amount: amount,
           recurring: {
             interval: "month",
           },

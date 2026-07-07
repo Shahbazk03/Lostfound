@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createSubscriptionSession } from "@/lib/stripe";
+import { db } from "@/db";
+import { organizationSettings } from "@/db/schema";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,9 +13,17 @@ export async function POST(request: NextRequest) {
 
     const { itemId } = await request.json();
 
+    const settings = await db.select().from(organizationSettings).limit(1);
+    const amount = settings.length > 0 && settings[0].metadata?.premiumSubscriptionFee 
+      ? Number(settings[0].metadata.premiumSubscriptionFee) 
+      : 499;
+    const currency = settings.length > 0 && settings[0].currency ? settings[0].currency : "usd";
+
     const sessionUrl = await createSubscriptionSession({
       userId: user.id,
       itemId,
+      amount,
+      currency,
     });
 
     if (!sessionUrl) {

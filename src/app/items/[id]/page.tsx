@@ -702,7 +702,7 @@ function ItemDetailContent() {
                     <h4 className="font-semibold text-slate-900">One-Time Unlock</h4>
                     <p className="text-sm text-slate-500">Unlock messaging for this item only</p>
                   </div>
-                  <div className="font-bold text-lg text-emerald-600">$1.00</div>
+                  <div className="font-bold text-lg text-emerald-600">{formatCurrency(settings?.metadata?.oneTimeUnlockFee || 100, settings?.currency || "USD")}</div>
                 </div>
                 <button
                   onClick={handleUnlockChat}
@@ -725,7 +725,7 @@ function ItemDetailContent() {
                     <p className="text-sm text-emerald-700">Unlimited messaging across all items</p>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-lg text-emerald-600">$4.99</div>
+                    <div className="font-bold text-lg text-emerald-600">{formatCurrency(settings?.metadata?.premiumSubscriptionFee || 499, settings?.currency || "USD")}</div>
                     <div className="text-xs text-emerald-700 uppercase tracking-wide">/ month</div>
                   </div>
                 </div>
