@@ -62,14 +62,16 @@ export default async function HomePage() {
               </div>
 
               {/* Advertisement Image Banner */}
-              <div className="relative w-full overflow-hidden rounded-2xl mb-8 shadow-xl border border-slate-200 dark:border-slate-800/50 group cursor-pointer transition-all hover:shadow-emerald-500/10 hover:border-emerald-500/30">
-                <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
-                <img 
-                  src="/premium-ad-banner.png" 
-                  alt="LostFound Premium Advertisement" 
-                  className="w-full h-auto object-cover max-h-[160px] transform group-hover:scale-[1.02] transition-transform duration-500" 
-                />
-              </div>
+              {settings?.metadata?.heroAdImageUrl && (
+                <Link href={settings.metadata.heroAdLinkUrl || "#"} target="_blank" className="relative w-full overflow-hidden rounded-2xl mb-8 shadow-xl border border-slate-200 dark:border-slate-800/50 group cursor-pointer transition-all hover:shadow-emerald-500/10 hover:border-emerald-500/30 block">
+                  <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
+                  <img 
+                    src={settings.metadata.heroAdImageUrl} 
+                    alt="Advertisement" 
+                    className="w-full h-auto object-cover max-h-[160px] transform group-hover:scale-[1.02] transition-transform duration-500" 
+                  />
+                </Link>
+              )}
 
               <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
                 Connect With What <br/>

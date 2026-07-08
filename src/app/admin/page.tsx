@@ -1039,6 +1039,20 @@ export default function AdminDashboard() {
                     </div>
                     
                     <div className="pt-4 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 mt-4">
+                      <h4 className="text-md font-bold text-slate-900 dark:text-white dark:text-white mb-4">Advertisement Banner Settings</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 dark:text-slate-300 mb-1.5">Banner Image URL</label>
+                          <input type="text" value={editingSettings.metadata?.heroAdImageUrl || ""} onChange={(e) => setEditingSettings({ ...editingSettings, metadata: { ...editingSettings.metadata, heroAdImageUrl: e.target.value } })} placeholder="Leave empty to hide banner" className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:bg-slate-800 outline-none transition-all" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 dark:text-slate-300 mb-1.5">Banner Link URL</label>
+                          <input type="text" value={editingSettings.metadata?.heroAdLinkUrl || ""} onChange={(e) => setEditingSettings({ ...editingSettings, metadata: { ...editingSettings.metadata, heroAdLinkUrl: e.target.value } })} placeholder="e.g. https://example.com" className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:bg-slate-800 outline-none transition-all" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 mt-4">
                       <h4 className="text-md font-bold text-slate-900 dark:text-white dark:text-white mb-4">Footer Settings</h4>
                       <div className="space-y-4">
                         <div>
