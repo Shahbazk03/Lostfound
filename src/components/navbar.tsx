@@ -29,13 +29,15 @@ export function Navbar() {
   }
 
   return (
-    <div className="relative w-full z-50 px-4 pt-4 pb-4 pointer-events-none">
-      <nav className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200 dark:border-slate-800/50 shadow-lg shadow-black/5 dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] dark:shadow-emerald-500/10 rounded-full max-w-7xl mx-auto pointer-events-auto transition-all duration-300 hover:shadow-xl dark:hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:hover:shadow-emerald-500/20">
-        <div className="px-6 lg:px-8">
+    <div className="sticky top-0 w-full z-50 pointer-events-none">
+      <nav className="bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 pointer-events-auto transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-1.5">
-              <span className="text-3xl font-black text-emerald-600 tracking-tighter">LF</span>
+            <Link href="/" className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm">
+                <span className="text-white font-bold text-sm tracking-wider">LF</span>
+              </div>
               <span className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">LOSTFOUND</span>
             </Link>
             <div className="hidden md:flex items-center gap-6">
