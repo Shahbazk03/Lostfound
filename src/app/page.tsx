@@ -61,11 +61,14 @@ export default async function HomePage() {
                 Global Recovery Network
               </div>
 
-              {/* Advertisement / Announcement Banner */}
-              <div className="relative w-full overflow-hidden bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-100 dark:border-emerald-800/30 rounded-xl mb-6 py-2.5 shadow-sm flex items-center">
-                <div className="whitespace-nowrap animate-marquee inline-block text-emerald-700 dark:text-emerald-400 font-medium text-sm">
-                  🚀 <span className="font-bold">Premium Subscription</span> is now available! Unlock unlimited messaging for just $4.99/month. &nbsp;&nbsp;&nbsp;&nbsp; 🎉 <span className="font-bold">Special Offer:</span> First 100 users get a free premium trial! &nbsp;&nbsp;&nbsp;&nbsp; 📢 <span className="font-bold">Advertise here:</span> Contact us at partners@lostfound.in
-                </div>
+              {/* Advertisement Image Banner */}
+              <div className="relative w-full overflow-hidden rounded-2xl mb-8 shadow-xl border border-slate-200 dark:border-slate-800/50 group cursor-pointer transition-all hover:shadow-emerald-500/10 hover:border-emerald-500/30">
+                <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
+                <img 
+                  src="/premium-ad-banner.png" 
+                  alt="LostFound Premium Advertisement" 
+                  className="w-full h-auto object-cover max-h-[160px] transform group-hover:scale-[1.02] transition-transform duration-500" 
+                />
               </div>
 
               <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
