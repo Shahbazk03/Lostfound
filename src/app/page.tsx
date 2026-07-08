@@ -46,7 +46,7 @@ export default async function HomePage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-200 selection:bg-emerald-500/30 selection:text-emerald-200">
       
       {/* Hero Section */}
-      <section className="relative min-h-[85vh] flex items-center overflow-hidden bg-white dark:bg-slate-950 pt-20">
+      <section className="relative min-h-[85vh] flex items-center overflow-x-hidden overflow-y-visible bg-white dark:bg-slate-950 pt-20">
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -88,7 +88,7 @@ export default async function HomePage() {
               <img 
                 src="/hero-3d-illustration.png" 
                 alt="LostFound Hero Illustration" 
-                className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal z-10 relative p-8" 
+                className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal z-10 relative scale-105" 
               />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-emerald-100 dark:border-emerald-900/30 rounded-full" />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] border border-emerald-50 dark:border-emerald-900/10 rounded-full" />
@@ -110,42 +110,48 @@ export default async function HomePage() {
           </div>
           
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-start hover:shadow-md transition-shadow">
-              <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
-                <Search className="w-8 h-8 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-row items-center gap-6 hover:shadow-md transition-shadow">
+              <div className="w-20 h-20 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center">
+                <Search className="w-10 h-10 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
               </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                Unlimited Searches
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400 font-medium">
-                Search without limits and find what you're looking for.
-              </p>
+              <div className="flex flex-col">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                  Unlimited Searches
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                  Search without limits and find what you're looking for.
+                </p>
+              </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-start hover:shadow-md transition-shadow">
-              <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-row items-center gap-6 hover:shadow-md transition-shadow">
+              <div className="w-20 h-20 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center">
                 <div className="relative">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 dark:text-emerald-400"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 dark:text-emerald-400"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                Priority Support
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400 font-medium">
-                Get faster assistance from our dedicated support team.
-              </p>
+              <div className="flex flex-col">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                  Priority Support
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                  Get faster assistance from our dedicated support team.
+                </p>
+              </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-start hover:shadow-md transition-shadow">
-              <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
-                <Shield className="w-8 h-8 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-row items-center gap-6 hover:shadow-md transition-shadow">
+              <div className="w-20 h-20 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center">
+                <Shield className="w-10 h-10 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
               </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                Ad-Free Experience
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400 font-medium">
-                Enjoy a clean, distraction-free experience while you search.
-              </p>
+              <div className="flex flex-col">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                  Ad-Free Experience
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                  Enjoy a clean, distraction-free experience while you search.
+                </p>
+              </div>
             </div>
           </div>
         </div>
