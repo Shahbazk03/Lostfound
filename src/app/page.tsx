@@ -56,10 +56,18 @@ export default async function HomePage() {
             
             {/* Left Column: Text */}
             <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 backdrop-blur-md text-emerald-400 px-4 py-1.5 rounded-full text-sm font-semibold tracking-wide mb-8">
+              <div className="inline-flex items-center gap-2 bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 backdrop-blur-md text-emerald-400 px-4 py-1.5 rounded-full text-sm font-semibold tracking-wide mb-6">
                 <Globe className="w-4 h-4" />
                 Global Recovery Network
               </div>
+
+              {/* Advertisement / Announcement Banner */}
+              <div className="relative w-full overflow-hidden bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-100 dark:border-emerald-800/30 rounded-xl mb-6 py-2.5 shadow-sm flex items-center">
+                <div className="whitespace-nowrap animate-marquee inline-block text-emerald-700 dark:text-emerald-400 font-medium text-sm">
+                  🚀 <span className="font-bold">Premium Subscription</span> is now available! Unlock unlimited messaging for just $4.99/month. &nbsp;&nbsp;&nbsp;&nbsp; 🎉 <span className="font-bold">Special Offer:</span> First 100 users get a free premium trial! &nbsp;&nbsp;&nbsp;&nbsp; 📢 <span className="font-bold">Advertise here:</span> Contact us at partners@lostfound.in
+                </div>
+              </div>
+
               <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
                 Connect With What <br/>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
