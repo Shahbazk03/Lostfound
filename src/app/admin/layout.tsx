@@ -17,10 +17,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
         {/* Main Scrollable Content */}
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-          <div className="max-w-6xl mx-auto w-full">
-            {children}
-          </div>
+        <main className="flex-1 overflow-y-auto">
+          {children}
         </main>
       </div>
     </div>

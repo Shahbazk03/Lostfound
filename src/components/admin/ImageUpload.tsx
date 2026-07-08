@@ -107,7 +107,7 @@ export function ImageUpload({ value, onChange, label = "Upload Image" }: ImageUp
               <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
                 Click or drag to upload
               </p>
-              <p className="text-xs text-slate-400 mt-1">SVG, PNG, JPG or GIF</p>
+              <p className="text-xs text-slate-400 mt-1">SVG, PNG, JPG, JPEG, WEBP or AVIF</p>
             </>
           )}
         </div>
