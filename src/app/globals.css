@@ -9,3 +9,13 @@
     100% { transform: translateX(-100%); }
   }
 }
+
+/* Hide scrollbar globally but allow scrolling */
+::-webkit-scrollbar {
+  display: none;
+}
+
+html, body {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
