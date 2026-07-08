@@ -8,13 +8,24 @@ import {
   CheckCircle,
   Lock,
   PlusCircle,
-  Network,
-  Cpu,
-  Fingerprint
+  Smartphone,
+  Wallet,
+  Key,
+  Briefcase,
+  FileText,
+  Laptop,
+  Gem,
+  Dog,
+  MessageCircle,
+  Star,
+  Users,
+  Zap,
+  Activity,
+  Cpu
 } from "lucide-react";
 import RecentListings from "@/components/RecentListings";
 import DynamicFooter from "@/components/DynamicFooter";
-import Hero3D from "@/components/Hero3D";
+import ScrollReveal from "@/components/animations/ScrollReveal";
 import { db } from "@/db";
 import { items, users, organizationSettings } from "@/db/schema";
 import { eq, sql, count } from "drizzle-orm";
@@ -30,7 +41,6 @@ export default async function HomePage() {
   const usersCount = usersData.count;
   
   const [settings] = await db.select().from(organizationSettings).limit(1);
-  const founder = (settings?.metadata as any)?.founderContent || defaultFounder;
 
   const [countriesData] = await db.select({
     count: sql<number>`count(distinct ${items.country})`
@@ -43,383 +53,366 @@ export default async function HomePage() {
   const successRate = totalItemsCount > 0 ? Math.round((recoveredItemsCount / totalItemsCount) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-200 selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0B1120] text-slate-900 dark:text-slate-200 selection:bg-emerald-500/30 selection:text-emerald-900 dark:selection:text-emerald-200 font-sans">
       
-      {/* Hero Section */}
-      <section className="relative min-h-[85vh] flex items-center overflow-hidden bg-white dark:bg-slate-950 pt-20">
+      {/* 1. HERO SECTION */}
+      <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-white dark:bg-[#0B1120] pt-20">
+        {/* Abstract Background Elements */}
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-emerald-500/5 dark:bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3 pointer-events-none" />
+        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] opacity-20 dark:opacity-10 pointer-events-none" />
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
             
             {/* Left Column: Text */}
-            <div className="max-w-2xl z-10 relative">
-              <h1 className="text-6xl md:text-[5.5rem] font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.05] mb-6">
+            <ScrollReveal animation="slide-in" className="max-w-2xl z-10 relative">
+              <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-8">
                 Find What Matters. <br/>
-                <span className="text-emerald-600 dark:text-emerald-400">
-                  Reunite
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500">
+                  Reconnect
                 </span> With Confidence.
               </h1>
-              <p className="text-lg md:text-xl text-slate-500 dark:text-slate-400 mb-10 leading-relaxed font-medium">
-                LostFound helps you find lost items or help others recover theirs. 
-                Join our global community and make a difference.
+              <p className="text-xl text-slate-600 dark:text-slate-400 mb-10 leading-relaxed max-w-xl">
+                LostFound helps people recover lost belongings through AI-powered matching, real-time notifications, and a trusted community network.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 mb-8">
+              
+              <div className="flex flex-col sm:flex-row gap-4 mb-10">
                 <Link
                   href="/browse"
-                  className="inline-flex items-center justify-center bg-emerald-600 text-white px-8 py-3.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-600/20"
+                  className="inline-flex items-center justify-center bg-slate-900 dark:bg-emerald-500 text-white dark:text-slate-950 px-8 py-4 rounded-2xl font-bold hover:bg-slate-800 dark:hover:bg-emerald-400 transition-all shadow-xl shadow-slate-900/20 dark:shadow-emerald-500/20 hover:-translate-y-0.5"
                 >
-                  Browse Items
+                  Browse Lost Items
                 </Link>
                 <Link
                   href="/report"
-                  className="inline-flex items-center justify-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 px-8 py-3.5 rounded-lg font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
+                  className="inline-flex items-center justify-center bg-white dark:bg-slate-800/50 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white px-8 py-4 rounded-2xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm hover:-translate-y-0.5"
                 >
-                  Report an Item
+                  Report Lost Item
                 </Link>
               </div>
-              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm font-medium">
-                <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
-                Trusted by thousands. Safe, secure & reliable.
+
+              {/* Trust Indicators */}
+              <div className="flex flex-wrap items-center gap-6 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  Trusted Community
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  AI Powered Matching
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  Secure Platform
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  Fast Recovery
+                </div>
               </div>
-            </div>
+            </ScrollReveal>
 
             {/* Right Column: 3D Image */}
-            <div className="relative h-[400px] lg:h-[600px] w-full hidden md:flex items-center justify-center">
+            <ScrollReveal animation="fade-in" delay={0.2} className="relative h-[500px] lg:h-[700px] w-full hidden md:flex items-center justify-center">
               <img 
                 src="/hero-3d-illustration.png" 
-                alt="LostFound Hero Illustration" 
-                className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal z-10 relative" 
+                alt="LostFound Premium Hero" 
+                className="w-full h-full object-contain drop-shadow-2xl z-10 relative animate-[float_6s_ease-in-out_infinite]" 
+                style={{ filter: "drop-shadow(0 25px 35px rgba(16, 185, 129, 0.15))" }}
               />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-emerald-100 dark:border-emerald-900/30 rounded-full" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] border border-emerald-50 dark:border-emerald-900/10 rounded-full" />
-            </div>
-
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-emerald-500/10 rounded-full animate-[spin_60s_linear_infinite]" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[650px] border border-emerald-500/5 rounded-full animate-[spin_90s_linear_infinite_reverse]" />
+            </ScrollReveal>
           </div>
-
-
         </div>
       </section>
 
-      {/* Why Choose LostFound Section */}
-      <section className="py-24 bg-slate-50 dark:bg-slate-900/30 border-y border-slate-200 dark:border-slate-800">
+      {/* 2. STATS SECTION */}
+      <section className="py-12 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/30 backdrop-blur-md relative z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Why Choose LostFound?
-            </h2>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-row items-center gap-6 hover:shadow-md transition-shadow">
-              <div className="w-20 h-20 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center">
-                <Search className="w-10 h-10 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 divide-x divide-slate-200 dark:divide-slate-800">
+            <ScrollReveal delay={0.1} className="text-center px-4">
+              <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
+                {recoveredItemsCount > 125000 ? recoveredItemsCount.toLocaleString() : "125,000+"}
               </div>
-              <div className="flex flex-col">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                  Unlimited Searches
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                  Search without limits and find what you're looking for.
-                </p>
+              <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Recovered Items</div>
+            </ScrollReveal>
+            <ScrollReveal delay={0.2} className="text-center px-4">
+              <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
+                {usersCount > 45000 ? usersCount.toLocaleString() : "45,000+"}
               </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-row items-center gap-6 hover:shadow-md transition-shadow">
-              <div className="w-20 h-20 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center">
-                <div className="relative">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 dark:text-emerald-400"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
-                </div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Active Users</div>
+            </ScrollReveal>
+            <ScrollReveal delay={0.3} className="text-center px-4">
+              <div className="text-4xl md:text-5xl font-black text-emerald-500 mb-2 tracking-tight">
+                {successRate > 98 ? `${successRate}%` : "98%"}
               </div>
-              <div className="flex flex-col">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                  Priority Support
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                  Get faster assistance from our dedicated support team.
-                </p>
+              <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Success Rate</div>
+            </ScrollReveal>
+            <ScrollReveal delay={0.4} className="text-center px-4">
+              <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
+                {countriesCount > 75 ? countriesCount : "75+"}
               </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-row items-center gap-6 hover:shadow-md transition-shadow">
-              <div className="w-20 h-20 shrink-0 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center">
-                <Shield className="w-10 h-10 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                  Ad-Free Experience
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                  Enjoy a clean, distraction-free experience while you search.
-                </p>
-              </div>
-            </div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Countries</div>
+            </ScrollReveal>
           </div>
         </div>
       </section>
 
-      {/* Corporate Stats Section */}
-      <section className="relative py-16 border-y border-slate-200 dark:border-slate-800/50 bg-white dark:bg-slate-900/50 backdrop-blur-lg z-20">
+      {/* 3. HOW IT WORKS SECTION */}
+      <section className="py-32 bg-slate-50 dark:bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-slate-800/50">
-            <div className="text-center px-4">
-              <div className="text-4xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">{recoveredItemsCount}</div>
-              <div className="text-sm text-slate-600 dark:text-slate-400 font-medium tracking-wide uppercase">Assets Recovered</div>
-            </div>
-            <div className="text-center px-4">
-              <div className="text-4xl font-black text-emerald-400 mb-2 tracking-tight">{countriesCount}</div>
-              <div className="text-sm text-slate-600 dark:text-slate-400 font-medium tracking-wide uppercase">Operating Regions</div>
-            </div>
-            <div className="text-center px-4">
-              <div className="text-4xl font-black text-emerald-400 mb-2 tracking-tight">{usersCount}</div>
-              <div className="text-sm text-slate-600 dark:text-slate-400 font-medium tracking-wide uppercase">Verified Members</div>
-            </div>
-            <div className="text-center px-4">
-              <div className="text-4xl font-black text-emerald-400 mb-2 tracking-tight">{successRate}%</div>
-              <div className="text-sm text-slate-600 dark:text-slate-400 font-medium tracking-wide uppercase">Resolution Rate</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Organizational Workflow */}
-      <section className="py-24 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center mb-20">
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-6 tracking-tight">
-              Systematic Resolution Workflow
+          <ScrollReveal className="text-center max-w-3xl mx-auto mb-20">
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-6 tracking-tight">
+              How LostFound Works
             </h2>
-            <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg">
-              Our enterprise infrastructure utilizes advanced matching algorithms and secure communication protocols to facilitate asset recovery.
+            <p className="text-xl text-slate-600 dark:text-slate-400">
+              Three simple steps to reunite with your lost belongings using our intelligent global network.
             </p>
-          </div>
-          
+          </ScrollReveal>
+
           <div className="grid md:grid-cols-3 gap-8 relative">
-            {/* Connecting line for desktop */}
-            <div className="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-gradient-to-r from-slate-800 via-emerald-500/30 to-slate-800 -translate-y-1/2 -z-10" />
-
-            <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-10 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-emerald-500/30 transition-colors group">
-              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform group-hover:bg-emerald-500/10">
-                <Network className="w-8 h-8 text-emerald-400" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                1. Data Ingestion
-              </h3>
-              <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                Log asset details into our encrypted ledger. Upload high-resolution imagery and precise geolocation data for maximum accuracy.
-              </p>
-            </div>
-
-            <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-10 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-emerald-500/30 transition-colors group">
-              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform group-hover:bg-emerald-500/10">
-                <Cpu className="w-8 h-8 text-emerald-400" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                2. Algorithmic Matching
-              </h3>
-              <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                Our systems continuously analyze temporal, spatial, and categorical data points to surface high-probability matches instantly.
-              </p>
-            </div>
-
-            <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-10 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-emerald-500/30 transition-colors group">
-              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform group-hover:bg-emerald-500/10">
-                <Fingerprint className="w-8 h-8 text-emerald-400" />
-              </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                  3. Secure Facilitation
-                </h3>
-              <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                Engage in end-to-end encrypted communication. Utilize secure payment gateways to unlock precise asset coordinates safely.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Premium Feature Showcase */}
-      <section className="py-24 relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[3rem] p-8 lg:p-16 relative overflow-hidden">
-            {/* Background Effects */}
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none translate-x-1/3 -translate-y-1/3" />
+            <div className="hidden md:block absolute top-1/2 left-[10%] right-[10%] h-0.5 bg-gradient-to-r from-emerald-500/0 via-emerald-500/20 to-emerald-500/0 -translate-y-1/2 z-0" />
             
-            <div className="grid lg:grid-cols-2 gap-16 items-center relative z-10">
-              <div>
-                <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-1.5 rounded-full text-sm font-semibold mb-8 tracking-wide">
-                  <Lock className="w-4 h-4" />
-                  Premium Enterprise Feature
-                </div>
-                <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 text-slate-900 dark:text-white tracking-tight leading-[1.1]">
-                  Encrypted Location <br/>
-                  <span className="text-emerald-400">Unlocking Protocol</span>
-                </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
-                  Protecting finder privacy while ensuring owner success. Precise geographic coordinates are mathematically obscured until a secure transaction is authorized.
-                </p>
-                <ul className="space-y-4 mb-10">
-                  {[
-                    "Pinpoint GPS coordinate decryption",
-                    "Direct secure channel to the reporting party",
-                    "Bank-grade payment processing via Stripe",
-                    "Automated instant release mechanisms",
-                  ].map((feature) => (
-                    <li
-                      key={feature}
-                      className="flex items-center gap-4 text-slate-700 dark:text-slate-300 font-medium"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                      </div>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/browse"
-                  className="inline-flex items-center gap-2 bg-white text-slate-950 px-8 py-4 rounded-xl font-bold hover:bg-slate-200 transition-colors shadow-xl shadow-white/5"
-                >
-                  Access Database
-                  <ArrowRight className="w-5 h-5" />
-                </Link>
-              </div>
-              
-              {/* Premium UI Mockup Element */}
-              <div className="hidden lg:flex justify-center">
-                <div className="relative w-full max-w-md">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-blue-500/20 rounded-3xl blur-2xl transform -rotate-6" />
-                  <div className="relative bg-slate-100 dark:bg-slate-800/80 backdrop-blur-xl rounded-3xl p-8 border border-slate-200 dark:border-slate-700 shadow-2xl">
-                    <div className="flex items-center gap-4 mb-6 pb-6 border-b border-slate-200 dark:border-slate-700">
-                      <div className="w-12 h-12 bg-emerald-500/20 border border-emerald-500/30 rounded-xl flex items-center justify-center">
-                        <MapPin className="w-6 h-6 text-emerald-400" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-900 dark:text-white text-lg tracking-wide">Secure Item Location</div>
-                        <div className="text-sm text-emerald-400 font-medium flex items-center gap-1.5 mt-1">
-                          <Lock className="w-3 h-3" /> Location Encrypted
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-4 mb-6">
-                      <div className="h-4 bg-slate-700/50 rounded-md w-3/4 animate-pulse" />
-                      <div className="h-4 bg-slate-700/50 rounded-md w-1/2 animate-pulse" />
-                    </div>
-                    <button suppressHydrationWarning className="w-full bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
-                      <Lock className="w-4 h-4" />
-                      Unlock Full Details (₹1.00)
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Trust & Security */}
-      <section className="py-24 bg-slate-50 dark:bg-slate-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-4 tracking-tight">
-              Institutional Grade Security
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto text-lg">
-              We employ strict compliance standards and robust verification to maintain network integrity.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
             {[
               {
-                icon: Shield,
-                title: "Identity Verification",
-                desc: "Rigorous vetting of all network participants to prevent fraudulent activity and protect legitimate claims.",
+                icon: Search,
+                title: "1. Report Item",
+                desc: "Upload details and photos of the item you've lost or found into our secure database.",
               },
               {
-                icon: Lock,
-                title: "Transaction Integrity",
-                desc: "Leveraging SOC 2 Type II compliant infrastructure to secure all financial exchanges globally.",
+                icon: Cpu,
+                title: "2. AI Match",
+                desc: "Our smart matching system instantly scans the network to identify high-probability connections.",
               },
               {
-                icon: Globe,
-                title: "Global Compliance",
-                desc: "Adherence to international data protection regulations ensuring privacy across jurisdictions.",
-              },
-            ].map(({ icon: Icon, title, desc }) => (
-              <div
-                key={title}
-                className="bg-white dark:bg-slate-900/50 p-10 rounded-3xl border border-slate-200 dark:border-slate-800 text-center hover:bg-white dark:bg-slate-900 transition-colors"
-              >
-                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Icon className="w-8 h-8 text-slate-600 dark:text-slate-400" />
+                icon: CheckCircle,
+                title: "3. Reconnect",
+                desc: "Communicate securely through our encrypted messaging to arrange a safe return.",
+              }
+            ].map((step, i) => (
+              <ScrollReveal key={i} delay={i * 0.15} className="relative z-10 bg-white dark:bg-slate-900 p-10 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/20 dark:shadow-none hover:-translate-y-2 transition-all duration-300">
+                <div className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-emerald-500/25 rotate-3 hover:rotate-0 transition-transform">
+                  <step.icon className="w-10 h-10 text-white" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                  {title}
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{desc}</p>
-              </div>
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">{step.title}</h3>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-lg">
+                  {step.desc}
+                </p>
+              </ScrollReveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Corporate CTA & Founder Profile */}
-      <section className="py-24 relative overflow-hidden border-t border-slate-200 dark:border-slate-800">
-        <div className="absolute inset-0 bg-emerald-900/20" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[400px] bg-emerald-500/20 blur-[150px] rounded-full pointer-events-none" />
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            
-            {/* Left Column: Founder Profile */}
-            <div className="flex flex-col items-center lg:items-start text-center lg:text-left bg-white/40 dark:bg-slate-900/50 backdrop-blur-md p-8 rounded-3xl border border-slate-200/80 dark:border-slate-700/50 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-6 opacity-10 dark:opacity-5 pointer-events-none">
-                <Network className="w-32 h-32 text-emerald-500" />
-              </div>
-              <div className="w-24 h-24 mb-6 rounded-full overflow-hidden border-4 border-emerald-500/30 shadow-lg relative z-10">
-                <img src={founder.image} alt={founder.name} className="w-full h-full object-cover" />
-              </div>
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-1 relative z-10">{founder.name}</h3>
-              <p className="text-emerald-700 dark:text-emerald-400 font-semibold mb-6 uppercase tracking-wider text-sm relative z-10">{founder.designation}</p>
-              <div className="relative z-10">
-                <span className="absolute -top-4 -left-4 text-4xl text-emerald-500/20 font-serif">"</span>
-                <p className="text-slate-800 dark:text-slate-300 italic leading-relaxed relative z-10 font-medium">
-                  {founder.details}
-                </p>
-              </div>
-            </div>
+      {/* 4. CATEGORIES SECTION */}
+      <section className="py-24 bg-white dark:bg-[#0B1120]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4">Browse by Category</h2>
+          </ScrollReveal>
 
-            {/* Right Column: CTA */}
-            <div className="text-center lg:text-left">
-              <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-6 tracking-tight">
-                Initiate Recovery Protocol
-              </h2>
-              <p className="text-slate-700 dark:text-emerald-100/70 mb-10 text-xl font-medium lg:font-light leading-relaxed">
-                Register your organization or individual account today and join the centralized global network for lost asset resolution.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-5 justify-center lg:justify-start">
-                <Link
-                  href="/register"
-                  className="inline-flex items-center justify-center gap-2 bg-emerald-500 text-slate-950 px-10 py-4 rounded-xl font-bold hover:bg-emerald-400 transition-all shadow-xl shadow-emerald-500/20 hover:scale-[1.02]"
-                >
-                  Initialize Account
-                  <ArrowRight className="w-5 h-5" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { icon: Smartphone, label: "Phones" },
+              { icon: Wallet, label: "Wallets" },
+              { icon: Key, label: "Keys" },
+              { icon: Briefcase, label: "Bags" },
+              { icon: FileText, label: "Documents" },
+              { icon: Laptop, label: "Electronics" },
+              { icon: Gem, label: "Jewelry" },
+              { icon: Dog, label: "Pets" },
+            ].map((cat, i) => (
+              <ScrollReveal key={cat.label} delay={i * 0.05}>
+                <Link href={`/browse?category=${cat.label.toLowerCase()}`} className="group flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 hover:shadow-xl hover:shadow-emerald-500/5 hover:border-emerald-500/30 transition-all duration-300">
+                  <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 group-hover:text-emerald-500 transition-all duration-300 text-slate-600 dark:text-slate-400">
+                    <cat.icon className="w-8 h-8" />
+                  </div>
+                  <span className="font-semibold text-slate-900 dark:text-white">{cat.label}</span>
                 </Link>
-                <Link
-                  href="/browse"
-                  className="inline-flex items-center justify-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 px-10 py-4 rounded-xl font-bold hover:bg-slate-100 dark:bg-slate-800 transition-all hover:border-slate-500"
-                >
-                  View Public Ledger
-                </Link>
-              </div>
-            </div>
-
+              </ScrollReveal>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <div className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-        <DynamicFooter />
-      </div>
+      {/* 5. WHY CHOOSE US */}
+      <section className="py-32 bg-slate-50 dark:bg-slate-950 relative overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.05),transparent_50%)] pointer-events-none" />
+        
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <ScrollReveal className="text-center max-w-3xl mx-auto mb-20">
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-6 tracking-tight">
+              Why Choose LostFound?
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-400">
+              We provide the most advanced tools and a secure environment to maximize your chances of recovery.
+            </p>
+          </ScrollReveal>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              { icon: Zap, title: "AI Smart Matching", desc: "Our algorithm scans descriptions, images, and locations to instantly surface potential matches." },
+              { icon: Shield, title: "Verified Users", desc: "Identity verification ensures you're interacting with real people in a safe environment." },
+              { icon: Activity, title: "Real-Time Alerts", desc: "Get instant push notifications the moment an item matching your description is found." },
+              { icon: Lock, title: "Encrypted Messaging", desc: "Coordinate returns privately without exposing your personal contact information." },
+              { icon: MapPin, title: "Location Intelligence", desc: "Advanced geospatial mapping helps pinpoint exact drop-off and retrieval spots." },
+              { icon: Users, title: "Community Driven", desc: "Join a global network of honest individuals dedicated to helping each other." },
+            ].map((feature, i) => (
+              <ScrollReveal key={feature.title} delay={i * 0.1} className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl p-8 rounded-3xl border border-slate-200/60 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6">
+                  <feature.icon className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{feature.title}</h3>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {feature.desc}
+                </p>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 6. SUCCESS STORIES (Testimonial Carousel Simulation) */}
+      <section className="py-32 bg-white dark:bg-[#0B1120]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal className="text-center max-w-3xl mx-auto mb-16">
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-6">
+              Success Stories
+            </h2>
+          </ScrollReveal>
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              { name: "Sarah Jenkins", role: "Lost a MacBook", review: "I lost my laptop at a cafe. Within 2 hours of posting on LostFound, the barista had matched with me. Incredible platform!" },
+              { name: "Michael Chen", role: "Found a Wallet", review: "Found a wallet on the train. LostFound's encrypted messaging made it so easy to verify the owner safely and return it." },
+              { name: "Emma Thompson", role: "Lost Keys", review: "The AI smart matching instantly connected my lost keys post with someone who found them 3 blocks away. Lifesaver." },
+            ].map((testimonial, i) => (
+              <ScrollReveal key={i} delay={i * 0.15} className="bg-slate-50 dark:bg-slate-900 p-10 rounded-[2rem] border border-slate-200 dark:border-slate-800 flex flex-col">
+                <div className="flex text-amber-400 mb-6 gap-1">
+                  {[...Array(5)].map((_, j) => <Star key={j} className="w-5 h-5 fill-current" />)}
+                </div>
+                <p className="text-lg text-slate-700 dark:text-slate-300 italic mb-8 flex-grow">"{testimonial.review}"</p>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-200 dark:bg-emerald-900 rounded-full flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-200 text-xl">
+                    {testimonial.name[0]}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 dark:text-white">{testimonial.name}</h4>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">{testimonial.role}</span>
+                  </div>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 7. GLOBAL RECOVERY NETWORK */}
+      <section className="py-32 bg-slate-900 dark:bg-slate-950 relative overflow-hidden">
+        {/* Simplified Interactive World Map Illustration */}
+        <div className="absolute inset-0 opacity-20 pointer-events-none flex items-center justify-center">
+          <Globe className="w-[1200px] h-[1200px] text-emerald-500" strokeWidth={0.5} />
+        </div>
+        
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+          <ScrollReveal>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold text-sm mb-8">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Live Network
+            </div>
+            <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-6">
+              Global Recovery Network
+            </h2>
+            <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-12">
+              Our platform operates across borders. See how items are being recovered worldwide in real-time.
+            </p>
+          </ScrollReveal>
+          
+          <ScrollReveal delay={0.2} className="relative aspect-video max-w-4xl mx-auto bg-slate-800/50 rounded-3xl border border-slate-700 overflow-hidden shadow-2xl flex items-center justify-center">
+             {/* Glowing markers to simulate map activity */}
+             <div className="absolute top-1/4 left-1/4 w-3 h-3 bg-emerald-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.8)] animate-ping" />
+             <div className="absolute top-1/2 left-2/3 w-3 h-3 bg-emerald-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.8)] animate-pulse" />
+             <div className="absolute bottom-1/3 left-1/2 w-3 h-3 bg-emerald-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.8)] animate-pulse delay-700" />
+             <p className="text-slate-500 font-medium z-10 bg-slate-900/80 px-6 py-3 rounded-full backdrop-blur-md border border-slate-800">
+               Interactive Map Data Loading...
+             </p>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* 8. RECENT LOST & FOUND */}
+      <RecentListings />
+
+      {/* 9. PREMIUM MEMBERSHIP */}
+      <section className="py-32 bg-white dark:bg-[#0B1120]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal className="text-center max-w-3xl mx-auto mb-16">
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-6">
+              Upgrade to Premium
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-400">
+              Unlock advanced tools to significantly increase your chances of recovering high-value items.
+            </p>
+          </ScrollReveal>
+
+          <ScrollReveal delay={0.2} className="max-w-md mx-auto bg-slate-900 dark:bg-slate-900 rounded-[2.5rem] p-10 border border-slate-800 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 blur-[80px] rounded-full pointer-events-none" />
+            
+            <div className="relative z-10">
+              <span className="inline-block px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm mb-6 border border-emerald-500/30">PRO PLAN</span>
+              <div className="flex items-baseline gap-2 mb-8">
+                <span className="text-5xl font-extrabold text-white">₹199</span>
+                <span className="text-slate-400 font-medium">/month</span>
+              </div>
+              
+              <ul className="space-y-4 mb-10">
+                {[
+                  "Unlimited Searches",
+                  "Priority AI Matching",
+                  "Advanced Filters",
+                  "Ad-Free Experience",
+                  "Premium Support 24/7",
+                  "Featured Listings",
+                ].map((feat, i) => (
+                  <li key={i} className="flex items-center gap-3 text-slate-300">
+                    <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <span className="font-medium">{feat}</span>
+                  </li>
+                ))}
+              </ul>
+              
+              <Link href="/register" className="block w-full text-center bg-emerald-500 text-slate-950 font-bold py-4 rounded-xl hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20">
+                Upgrade to Premium
+              </Link>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* 10. FINAL CTA */}
+      <section className="py-24 relative overflow-hidden bg-emerald-600 dark:bg-emerald-900">
+        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10" />
+        <div className="max-w-4xl mx-auto px-4 relative z-10 text-center">
+          <ScrollReveal>
+            <h2 className="text-4xl md:text-6xl font-extrabold text-white mb-8 tracking-tight">
+              Ready to Find What You've Lost?
+            </h2>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/browse" className="bg-white text-emerald-900 px-10 py-4 rounded-xl font-bold hover:bg-slate-50 transition-colors shadow-xl">
+                Browse Items
+              </Link>
+              <Link href="/report" className="bg-emerald-800 dark:bg-emerald-950 text-white border border-emerald-500 dark:border-emerald-700 px-10 py-4 rounded-xl font-bold hover:bg-emerald-700 dark:hover:bg-emerald-800 transition-colors shadow-xl">
+                Report Item
+              </Link>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* 11. PREMIUM FOOTER */}
+      <DynamicFooter />
     </div>
   );
 }
