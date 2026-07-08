@@ -312,7 +312,7 @@ export const cmsFooter = pgTable("cms_footer", {
   contactEmail: varchar("contact_email", { length: 255 }),
   contactPhone: varchar("contact_phone", { length: 50 }),
   socialLinks: jsonb("social_links").$type<{platform: string, url: string, icon: string}[]>().default([]),
-  footerLinks: jsonb("footer_links").$type<{title: string, links: {label: string, url: string}[]}[]>().default([]),
+  footerLinks: jsonb("footer_links").$type<{title: string, links: {label: string, url?: string, pageId?: number}[]}[]>().default([]),
   newsletterEnabled: boolean("newsletter_enabled").default(true).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
 });
@@ -352,3 +352,55 @@ export const activityLogs = pgTable("activity_logs", {
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const cmsPageStatusEnum = pgEnum("cms_page_status", ["draft", "published", "scheduled", "archived"]);
+
+export const cmsPages = pgTable("cms_pages", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  status: cmsPageStatusEnum("status").default("draft").notNull(),
+  visibility: varchar("visibility", { length: 50 }).default("public").notNull(), // public, private, password
+  seoTitle: varchar("seo_title", { length: 255 }),
+  seoDescription: text("seo_description"),
+  keywords: text("keywords"),
+  ogImage: text("og_image"),
+  twitterCard: varchar("twitter_card", { length: 50 }).default("summary_large_image"),
+  canonicalUrl: varchar("canonical_url", { length: 255 }),
+  schemaOrg: jsonb("schema_org"),
+  robots: varchar("robots", { length: 100 }).default("index, follow"),
+  authorId: integer("author_id").references(() => users.id),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const cmsPageBlocks = pgTable("cms_page_blocks", {
+  id: serial("id").primaryKey(),
+  pageId: integer("page_id")
+    .notNull()
+    .references(() => cmsPages.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 50 }).notNull(), // hero, rich-text, faq, gallery, etc.
+  content: jsonb("content").notNull(),
+  orderIndex: integer("order_index").notNull().default(0),
+});
+
+export const cmsPageVersions = pgTable("cms_page_versions", {
+  id: serial("id").primaryKey(),
+  pageId: integer("page_id")
+    .notNull()
+    .references(() => cmsPages.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 255 }).notNull(),
+  blocks: jsonb("blocks").notNull(), // Snapshot of all blocks
+  seoMetadata: jsonb("seo_metadata"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type CmsPage = typeof cmsPages.$inferSelect;
+export type NewCmsPage = typeof cmsPages.$inferInsert;
+export type CmsPageBlock = typeof cmsPageBlocks.$inferSelect;
+export type NewCmsPageBlock = typeof cmsPageBlocks.$inferInsert;
+export type CmsPageVersion = typeof cmsPageVersions.$inferSelect;
+export type NewCmsPageVersion = typeof cmsPageVersions.$inferInsert;
+

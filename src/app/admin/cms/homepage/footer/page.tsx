@@ -8,10 +8,15 @@ import { ImageUpload } from "@/components/admin/ImageUpload";
 export default function FooterPage() {
   const { data, updateFooter } = useCMS();
   const [isSaving, setIsSaving] = useState(false);
-  const [localData, setLocalData] = useState(data.footer || {
+  const [localData, setLocalData] = useState<any>(data.footer || {
     logo: "", description: "", copyrightText: "", contactEmail: "", contactPhone: "", socialLinks: [], footerLinks: [], newsletterEnabled: true, isActive: true
   });
   const [successMsg, setSuccessMsg] = useState("");
+  const [cmsPages, setCmsPages] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/cms/pages").then(r => r.json()).then(setCmsPages).catch(console.error);
+  }, []);
 
   useEffect(() => {
     setLocalData(data.footer || {
@@ -284,16 +289,38 @@ export default function FooterPage() {
                         type="text"
                         value={link.label || ""}
                         onChange={(e) => handleUpdateLink(i, j, "label", e.target.value)}
-                        className="w-1/2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        className="w-[30%] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
                         placeholder="Label"
                       />
-                      <input
-                        type="text"
-                        value={link.url || ""}
-                        onChange={(e) => handleUpdateLink(i, j, "url", e.target.value)}
-                        className="w-1/2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        placeholder="URL"
-                      />
+                      <select
+                        value={link.pageId || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const newCols = [...(localData.footerLinks || [])];
+                          if (val) {
+                            newCols[i].links[j].pageId = parseInt(val);
+                            newCols[i].links[j].url = undefined; // Clear URL if page ID is set
+                          } else {
+                            newCols[i].links[j].pageId = undefined;
+                          }
+                          handleChange("footerLinks", newCols);
+                        }}
+                        className="w-[35%] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      >
+                        <option value="">Custom URL</option>
+                        {cmsPages.map(p => (
+                          <option key={p.id} value={p.id}>{p.title} (/{p.slug})</option>
+                        ))}
+                      </select>
+                      {!link.pageId && (
+                        <input
+                          type="text"
+                          value={link.url || ""}
+                          onChange={(e) => handleUpdateLink(i, j, "url", e.target.value)}
+                          className="w-[35%] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          placeholder="URL"
+                        />
+                      )}
                       <button onClick={() => handleRemoveLink(i, j)} className="text-red-500 hover:text-red-600 px-2">
                         <Trash2 className="w-4 h-4" />
                       </button>
