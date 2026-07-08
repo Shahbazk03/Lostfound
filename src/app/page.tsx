@@ -27,9 +27,10 @@ import RecentListings from "@/components/RecentListings";
 import DynamicFooter from "@/components/DynamicFooter";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 import { db } from "@/db";
-import { items, users, organizationSettings, cmsHero } from "@/db/schema";
-import { eq, sql, count } from "drizzle-orm";
+import { items, users, organizationSettings, cmsHero, cmsStatistics, cmsCategories, cmsFeatures, cmsTestimonials, cmsPricingPlans } from "@/db/schema";
+import { eq, sql, count, asc, desc } from "drizzle-orm";
 import { defaultFounder } from "@/lib/content-constants";
+import * as Icons from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,11 @@ export default async function HomePage() {
   const successRate = totalItemsCount > 0 ? Math.round((recoveredItemsCount / totalItemsCount) * 100) : 0;
 
   const [heroData] = await db.select().from(cmsHero).limit(1);
+  const statisticsList = await db.select().from(cmsStatistics).orderBy(asc(cmsStatistics.orderIndex));
+  const categoriesList = await db.select().from(cmsCategories).orderBy(asc(cmsCategories.orderIndex));
+  const featuresList = await db.select().from(cmsFeatures).orderBy(asc(cmsFeatures.orderIndex));
+  const testimonialsList = await db.select().from(cmsTestimonials).orderBy(desc(cmsTestimonials.createdAt));
+  const pricingPlansList = await db.select().from(cmsPricingPlans).orderBy(asc(cmsPricingPlans.orderIndex));
   
   // Defaults in case CMS data is empty
   const hero = heroData || {
@@ -164,31 +170,44 @@ export default async function HomePage() {
       {/* 2. STATS SECTION */}
       <section className="py-12 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/30 backdrop-blur-md relative z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 divide-x divide-slate-200 dark:divide-slate-800">
-            <ScrollReveal delay={0.1} className="text-center px-4">
-              <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
-                {recoveredItemsCount.toLocaleString()}
-              </div>
-              <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Recovered Items</div>
-            </ScrollReveal>
-            <ScrollReveal delay={0.2} className="text-center px-4">
-              <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
-                {usersCount.toLocaleString()}
-              </div>
-              <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Active Users</div>
-            </ScrollReveal>
-            <ScrollReveal delay={0.3} className="text-center px-4">
-              <div className="text-4xl md:text-5xl font-black text-emerald-500 mb-2 tracking-tight">
-                {successRate}%
-              </div>
-              <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Success Rate</div>
-            </ScrollReveal>
-            <ScrollReveal delay={0.4} className="text-center px-4">
-              <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
-                {countriesCount.toLocaleString()}
-              </div>
-              <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Countries</div>
-            </ScrollReveal>
+          <div className={`grid grid-cols-2 lg:grid-cols-${Math.min(Math.max(statisticsList.length || 4, 1), 4)} gap-8 divide-x divide-slate-200 dark:divide-slate-800`}>
+            {statisticsList.length > 0 ? (
+              statisticsList.filter(s => s.isActive).map((stat, i) => (
+                <ScrollReveal key={stat.id} delay={i * 0.1} className="text-center px-4">
+                  <div className={`text-4xl md:text-5xl font-black mb-2 tracking-tight ${stat.color === 'emerald' ? 'text-emerald-500' : stat.color === 'blue' ? 'text-blue-500' : stat.color === 'purple' ? 'text-purple-500' : stat.color === 'orange' ? 'text-orange-500' : 'text-slate-900 dark:text-white'}`}>
+                    {stat.numberValue}
+                  </div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">{stat.label}</div>
+                </ScrollReveal>
+              ))
+            ) : (
+              <>
+                <ScrollReveal delay={0.1} className="text-center px-4">
+                  <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
+                    {recoveredItemsCount.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Recovered Items</div>
+                </ScrollReveal>
+                <ScrollReveal delay={0.2} className="text-center px-4">
+                  <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
+                    {usersCount.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Active Users</div>
+                </ScrollReveal>
+                <ScrollReveal delay={0.3} className="text-center px-4">
+                  <div className="text-4xl md:text-5xl font-black text-emerald-500 mb-2 tracking-tight">
+                    {successRate}%
+                  </div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Success Rate</div>
+                </ScrollReveal>
+                <ScrollReveal delay={0.4} className="text-center px-4">
+                  <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
+                    {countriesCount.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Countries</div>
+                </ScrollReveal>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -247,25 +266,42 @@ export default async function HomePage() {
           </ScrollReveal>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {[
-              { icon: Smartphone, label: "Phones" },
-              { icon: Wallet, label: "Wallets" },
-              { icon: Key, label: "Keys" },
-              { icon: Briefcase, label: "Bags" },
-              { icon: FileText, label: "Documents" },
-              { icon: Laptop, label: "Electronics" },
-              { icon: Gem, label: "Jewelry" },
-              { icon: Dog, label: "Pets" },
-            ].map((cat, i) => (
-              <ScrollReveal key={cat.label} delay={i * 0.05}>
-                <Link href={`/browse?category=${cat.label.toLowerCase()}`} className="group flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 hover:shadow-xl hover:shadow-emerald-500/5 hover:border-emerald-500/30 transition-all duration-300">
-                  <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 group-hover:text-emerald-500 transition-all duration-300 text-slate-600 dark:text-slate-400">
-                    <cat.icon className="w-8 h-8" />
-                  </div>
-                  <span className="font-semibold text-slate-900 dark:text-white">{cat.label}</span>
-                </Link>
-              </ScrollReveal>
-            ))}
+            {categoriesList.length > 0 ? (
+              categoriesList.filter(c => c.isActive).map((cat, i) => {
+                // @ts-ignore
+                const IconComponent = Icons[cat.icon] || Icons.Package;
+                return (
+                  <ScrollReveal key={cat.id} delay={i * 0.05}>
+                    <Link href={`/browse?category=${encodeURIComponent(cat.name.toLowerCase())}`} className="group flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 hover:shadow-xl hover:shadow-emerald-500/5 hover:border-emerald-500/30 transition-all duration-300 h-full">
+                      <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 group-hover:text-emerald-500 transition-all duration-300 text-slate-600 dark:text-slate-400">
+                        <IconComponent className="w-8 h-8" />
+                      </div>
+                      <span className="font-semibold text-slate-900 dark:text-white text-center">{cat.name}</span>
+                    </Link>
+                  </ScrollReveal>
+                );
+              })
+            ) : (
+              [
+                { icon: Smartphone, label: "Phones" },
+                { icon: Wallet, label: "Wallets" },
+                { icon: Key, label: "Keys" },
+                { icon: Briefcase, label: "Bags" },
+                { icon: FileText, label: "Documents" },
+                { icon: Laptop, label: "Electronics" },
+                { icon: Gem, label: "Jewelry" },
+                { icon: Dog, label: "Pets" },
+              ].map((cat, i) => (
+                <ScrollReveal key={cat.label} delay={i * 0.05}>
+                  <Link href={`/browse?category=${cat.label.toLowerCase()}`} className="group flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 hover:shadow-xl hover:shadow-emerald-500/5 hover:border-emerald-500/30 transition-all duration-300 h-full">
+                    <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 group-hover:text-emerald-500 transition-all duration-300 text-slate-600 dark:text-slate-400">
+                      <cat.icon className="w-8 h-8" />
+                    </div>
+                    <span className="font-semibold text-slate-900 dark:text-white">{cat.label}</span>
+                  </Link>
+                </ScrollReveal>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -285,24 +321,42 @@ export default async function HomePage() {
           </ScrollReveal>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              { icon: Zap, title: "AI Smart Matching", desc: "Our algorithm scans descriptions, images, and locations to instantly surface potential matches." },
-              { icon: Shield, title: "Verified Users", desc: "Identity verification ensures you're interacting with real people in a safe environment." },
-              { icon: Activity, title: "Real-Time Alerts", desc: "Get instant push notifications the moment an item matching your description is found." },
-              { icon: Lock, title: "Encrypted Messaging", desc: "Coordinate returns privately without exposing your personal contact information." },
-              { icon: MapPin, title: "Location Intelligence", desc: "Advanced geospatial mapping helps pinpoint exact drop-off and retrieval spots." },
-              { icon: Users, title: "Community Driven", desc: "Join a global network of honest individuals dedicated to helping each other." },
-            ].map((feature, i) => (
-              <ScrollReveal key={feature.title} delay={i * 0.1} className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl p-8 rounded-3xl border border-slate-200/60 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 transition-colors">
-                <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6">
-                  <feature.icon className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{feature.title}</h3>
-                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                  {feature.desc}
-                </p>
-              </ScrollReveal>
-            ))}
+            {featuresList.length > 0 ? (
+              featuresList.filter(f => f.isActive).map((feature, i) => {
+                // @ts-ignore
+                const IconComponent = Icons[feature.icon] || Icons.Shield;
+                return (
+                  <ScrollReveal key={feature.id} delay={i * 0.1} className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl p-8 rounded-3xl border border-slate-200/60 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 transition-colors h-full">
+                    <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6">
+                      <IconComponent className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{feature.title}</h3>
+                    <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                      {feature.description}
+                    </p>
+                  </ScrollReveal>
+                );
+              })
+            ) : (
+              [
+                { icon: Zap, title: "AI Smart Matching", desc: "Our algorithm scans descriptions, images, and locations to instantly surface potential matches." },
+                { icon: Shield, title: "Verified Users", desc: "Identity verification ensures you're interacting with real people in a safe environment." },
+                { icon: Activity, title: "Real-Time Alerts", desc: "Get instant push notifications the moment an item matching your description is found." },
+                { icon: Lock, title: "Encrypted Messaging", desc: "Coordinate returns privately without exposing your personal contact information." },
+                { icon: MapPin, title: "Location Intelligence", desc: "Advanced geospatial mapping helps pinpoint exact drop-off and retrieval spots." },
+                { icon: Users, title: "Community Driven", desc: "Join a global network of honest individuals dedicated to helping each other." },
+              ].map((feature, i) => (
+                <ScrollReveal key={feature.title} delay={i * 0.1} className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl p-8 rounded-3xl border border-slate-200/60 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 transition-colors h-full">
+                  <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6">
+                    <feature.icon className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{feature.title}</h3>
+                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {feature.desc}
+                  </p>
+                </ScrollReveal>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -317,27 +371,54 @@ export default async function HomePage() {
           </ScrollReveal>
           
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { name: "Sarah Jenkins", role: "Lost a MacBook", review: "I lost my laptop at a cafe. Within 2 hours of posting on LostFound, the barista had matched with me. Incredible platform!" },
-              { name: "Michael Chen", role: "Found a Wallet", review: "Found a wallet on the train. LostFound's encrypted messaging made it so easy to verify the owner safely and return it." },
-              { name: "Emma Thompson", role: "Lost Keys", review: "The AI smart matching instantly connected my lost keys post with someone who found them 3 blocks away. Lifesaver." },
-            ].map((testimonial, i) => (
-              <ScrollReveal key={i} delay={i * 0.15} className="bg-slate-50 dark:bg-slate-900 p-10 rounded-[2rem] border border-slate-200 dark:border-slate-800 flex flex-col">
-                <div className="flex text-amber-400 mb-6 gap-1">
-                  {[...Array(5)].map((_, j) => <Star key={j} className="w-5 h-5 fill-current" />)}
-                </div>
-                <p className="text-lg text-slate-700 dark:text-slate-300 italic mb-8 flex-grow">"{testimonial.review}"</p>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-emerald-200 dark:bg-emerald-900 rounded-full flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-200 text-xl">
-                    {testimonial.name[0]}
+            {testimonialsList.length > 0 ? (
+              testimonialsList.filter(t => t.isActive).map((testimonial, i) => (
+                <ScrollReveal key={testimonial.id} delay={i * 0.15} className="bg-slate-50 dark:bg-slate-900 p-10 rounded-[2rem] border border-slate-200 dark:border-slate-800 flex flex-col h-full">
+                  <div className="flex text-amber-400 mb-6 gap-1">
+                    {[...Array(5)].map((_, j) => <Star key={j} className={`w-5 h-5 ${j < testimonial.rating ? "fill-current" : "text-slate-200 dark:text-slate-700"}`} />)}
                   </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 dark:text-white">{testimonial.name}</h4>
-                    <span className="text-sm text-slate-500 dark:text-slate-400">{testimonial.role}</span>
+                  <p className="text-lg text-slate-700 dark:text-slate-300 italic mb-8 flex-grow">"{testimonial.reviewText}"</p>
+                  <div className="flex items-center gap-4 mt-auto">
+                    {testimonial.customerPhoto ? (
+                      <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={testimonial.customerPhoto} alt={testimonial.customerName} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 bg-emerald-200 dark:bg-emerald-900 rounded-full flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-200 text-xl">
+                        {testimonial.customerName.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-white">{testimonial.customerName}</h4>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">{testimonial.customerRole}</span>
+                    </div>
                   </div>
-                </div>
-              </ScrollReveal>
-            ))}
+                </ScrollReveal>
+              ))
+            ) : (
+              [
+                { name: "Sarah Jenkins", role: "Lost a MacBook", review: "I lost my laptop at a cafe. Within 2 hours of posting on LostFound, the barista had matched with me. Incredible platform!" },
+                { name: "Michael Chen", role: "Found a Wallet", review: "Found a wallet on the train. LostFound's encrypted messaging made it so easy to verify the owner safely and return it." },
+                { name: "Emma Thompson", role: "Lost Keys", review: "The AI smart matching instantly connected my lost keys post with someone who found them 3 blocks away. Lifesaver." },
+              ].map((testimonial, i) => (
+                <ScrollReveal key={i} delay={i * 0.15} className="bg-slate-50 dark:bg-slate-900 p-10 rounded-[2rem] border border-slate-200 dark:border-slate-800 flex flex-col h-full">
+                  <div className="flex text-amber-400 mb-6 gap-1">
+                    {[...Array(5)].map((_, j) => <Star key={j} className="w-5 h-5 fill-current" />)}
+                  </div>
+                  <p className="text-lg text-slate-700 dark:text-slate-300 italic mb-8 flex-grow">"{testimonial.review}"</p>
+                  <div className="flex items-center gap-4 mt-auto">
+                    <div className="w-12 h-12 bg-emerald-200 dark:bg-emerald-900 rounded-full flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-200 text-xl">
+                      {testimonial.name[0]}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-white">{testimonial.name}</h4>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">{testimonial.role}</span>
+                    </div>
+                  </div>
+                </ScrollReveal>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -390,37 +471,70 @@ export default async function HomePage() {
             </p>
           </ScrollReveal>
 
-          <ScrollReveal delay={0.2} className="max-w-md mx-auto bg-slate-900 dark:bg-slate-900 rounded-[2.5rem] p-10 border border-slate-800 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 blur-[80px] rounded-full pointer-events-none" />
-            
-            <div className="relative z-10">
-              <span className="inline-block px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm mb-6 border border-emerald-500/30">PRO PLAN</span>
-              <div className="flex items-baseline gap-2 mb-8">
-                <span className="text-5xl font-extrabold text-white">₹199</span>
-                <span className="text-slate-400 font-medium">/month</span>
-              </div>
-              
-              <ul className="space-y-4 mb-10">
-                {[
-                  "Unlimited Searches",
-                  "Priority AI Matching",
-                  "Advanced Filters",
-                  "Ad-Free Experience",
-                  "Premium Support 24/7",
-                  "Featured Listings",
-                ].map((feat, i) => (
-                  <li key={i} className="flex items-center gap-3 text-slate-300">
-                    <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <span className="font-medium">{feat}</span>
-                  </li>
-                ))}
-              </ul>
-              
-              <Link href="/register" className="block w-full text-center bg-emerald-500 text-slate-950 font-bold py-4 rounded-xl hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20">
-                Upgrade to Premium
-              </Link>
+          {pricingPlansList.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
+              {pricingPlansList.filter(p => p.isActive).map((plan, i) => (
+                <ScrollReveal key={plan.id} delay={i * 0.2} className={`relative bg-slate-900 dark:bg-slate-900 rounded-[2.5rem] p-10 border transition-all ${plan.isPopular ? 'border-emerald-500 shadow-2xl shadow-emerald-500/20 scale-105 z-10' : 'border-slate-800 shadow-xl'} overflow-hidden h-full flex flex-col`}>
+                  {plan.isPopular && <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 blur-[80px] rounded-full pointer-events-none" />}
+                  
+                  <div className="relative z-10 flex-grow flex flex-col">
+                    {plan.isPopular && <span className="inline-block px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs mb-6 border border-emerald-500/30 self-start">MOST POPULAR</span>}
+                    <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
+                    <p className="text-slate-400 text-sm mb-6 h-10">{plan.description}</p>
+                    <div className="flex items-baseline gap-2 mb-8">
+                      <span className="text-5xl font-extrabold text-white">{plan.price}</span>
+                      <span className="text-slate-400 font-medium">{plan.period}</span>
+                    </div>
+                    
+                    <ul className="space-y-4 mb-10 flex-grow">
+                      {(plan.features as string[]).map((feat, i) => (
+                        <li key={i} className="flex items-start gap-3 text-slate-300">
+                          <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                          <span className="font-medium text-sm">{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    
+                    <Link href={plan.buttonLink || "/register"} className={`block w-full text-center font-bold py-4 rounded-xl transition-colors shadow-lg ${plan.isPopular ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-500/20' : 'bg-slate-800 text-white hover:bg-slate-700'} mt-auto`}>
+                      {plan.buttonText}
+                    </Link>
+                  </div>
+                </ScrollReveal>
+              ))}
             </div>
-          </ScrollReveal>
+          ) : (
+            <ScrollReveal delay={0.2} className="max-w-md mx-auto bg-slate-900 dark:bg-slate-900 rounded-[2.5rem] p-10 border border-slate-800 shadow-2xl relative overflow-hidden mt-12">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 blur-[80px] rounded-full pointer-events-none" />
+              
+              <div className="relative z-10">
+                <span className="inline-block px-4 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm mb-6 border border-emerald-500/30">PRO PLAN</span>
+                <div className="flex items-baseline gap-2 mb-8">
+                  <span className="text-5xl font-extrabold text-white">₹199</span>
+                  <span className="text-slate-400 font-medium">/month</span>
+                </div>
+                
+                <ul className="space-y-4 mb-10">
+                  {[
+                    "Unlimited Searches",
+                    "Priority AI Matching",
+                    "Advanced Filters",
+                    "Ad-Free Experience",
+                    "Premium Support 24/7",
+                    "Featured Listings",
+                  ].map((feat, i) => (
+                    <li key={i} className="flex items-center gap-3 text-slate-300">
+                      <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <span className="font-medium">{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+                
+                <Link href="/register" className="block w-full text-center bg-emerald-500 text-slate-950 font-bold py-4 rounded-xl hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20">
+                  Upgrade to Premium
+                </Link>
+              </div>
+            </ScrollReveal>
+          )}
         </div>
       </section>
 

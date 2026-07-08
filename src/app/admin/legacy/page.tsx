@@ -2,7 +2,7 @@
 
 import { LoadingLogo } from "@/components/LoadingLogo";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { motion, AnimatePresence } from "framer-motion";
@@ -164,7 +164,15 @@ export default function AdminDashboard() {
   const { user } = useAuth();
   const { settings: globalSettings, refreshSettings } = useSettings();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const searchParams = useSearchParams();
+  const defaultTab = searchParams.get("tab") as TabType | null;
+  const [activeTab, setActiveTab] = useState<TabType>(defaultTab || "overview");
+
+  // Keep activeTab in sync with URL changes
+  useEffect(() => {
+    if (defaultTab) setActiveTab(defaultTab);
+  }, [defaultTab]);
+
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [items, setItems] = useState<AdminItem[]>([]);
@@ -395,38 +403,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col md:flex-row relative overflow-hidden">
-      <Background3D />
-      <aside className="w-full md:w-64 bg-white dark:bg-slate-800/80 dark:bg-slate-900/60 backdrop-blur-2xl text-slate-900 dark:text-white flex-shrink-0 md:h-[calc(100vh-64px)] relative z-10 border-r border-slate-200 dark:border-slate-700/50 dark:border-slate-800/50 shadow-[4px_0_24px_rgba(0,0,0,0.2)] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-8 text-emerald-400">
-            <Shield className="w-8 h-8" />
-            <h1 className="text-2xl font-bold tracking-tight">Admin<span className="text-slate-900 dark:text-white dark:text-white">Portal</span></h1>
-          </div>
-          <nav className="space-y-2">
-            {tabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 ${
-                  activeTab === id
-                    ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
-                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800 hover:text-slate-200"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{label}</span>
-                </div>
-                {activeTab === id && <ChevronRight className="w-4 h-4" />}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </aside>
-
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto relative">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/2" />
+    <div className="w-full h-full">
         
         {loading ? (
           <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -915,8 +892,6 @@ export default function AdminDashboard() {
             </motion.div>
           </AnimatePresence>
         )}
-      </main>
-
       <AnimatePresence>
         {(showUserModal || editingUser || editingItem || editingSettings) && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-white dark:bg-slate-800/60 dark:bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
