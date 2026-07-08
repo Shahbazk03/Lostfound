@@ -107,14 +107,25 @@ export default function CMSPageEditor({ params }: { params: Promise<{ id: string
             </button>
             <h2 className="font-semibold text-slate-900 dark:text-white truncate max-w-[150px]">{page.title}</h2>
           </div>
-          <button
-            onClick={savePage}
-            disabled={saving}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-md font-medium text-sm flex items-center gap-2 transition disabled:opacity-50"
-          >
-            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/${page.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-900/30 px-3 py-1.5 rounded-md font-medium text-sm flex items-center gap-2 transition"
+            >
+              <Eye className="w-4 h-4" />
+              View Live
+            </a>
+            <button
+              onClick={savePage}
+              disabled={saving}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-md font-medium text-sm flex items-center gap-2 transition disabled:opacity-50"
+            >
+              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
