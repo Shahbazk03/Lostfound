@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-import { getDashboardStats } from "./actions";
+import { getDashboardStats, getRecentActivity } from "./actions";
 
 interface DashboardStats {
   totalUsers: number;
@@ -29,14 +29,43 @@ interface DashboardStats {
   supportTickets: number;
 }
 
+interface ActivityLog {
+  id: number;
+  action: string;
+  entityType: string;
+  createdAt: string | Date;
+  userName?: string | null;
+}
+
+function timeAgo(date: Date | string) {
+  const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+  let interval = seconds / 31536000;
+  if (interval >= 1) return Math.floor(interval) + " years ago";
+  interval = seconds / 2592000;
+  if (interval >= 1) return Math.floor(interval) + " months ago";
+  interval = seconds / 86400;
+  if (interval >= 1) return Math.floor(interval) + " days ago";
+  interval = seconds / 3600;
+  if (interval >= 1) return Math.floor(interval) + " hours ago";
+  interval = seconds / 60;
+  if (interval >= 1) return Math.floor(interval) + " minutes ago";
+  if (seconds < 10) return "just now";
+  return Math.floor(seconds) + " seconds ago";
+}
+
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDashboardStats().then((data) => {
-      setStats(data);
+    Promise.all([
+      getDashboardStats(),
+      getRecentActivity()
+    ]).then(([statsData, activityData]) => {
+      setStats(statsData);
+      setActivities(activityData);
       setLoading(false);
     });
   }, []);
@@ -104,16 +133,21 @@ export default function AdminDashboard() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Recent Activity</h2>
           <div className="space-y-4">
-             {/* Mock activity feed */}
-             {[1,2,3,4,5].map(i => (
-               <div key={i} className="flex items-start gap-3">
-                 <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2" />
-                 <div>
-                   <p className="text-sm text-slate-900 dark:text-white font-medium">New user registered</p>
-                   <p className="text-xs text-slate-500">2 minutes ago</p>
-                 </div>
-               </div>
-             ))}
+            {activities.length > 0 ? (
+              activities.map((activity) => (
+                <div key={activity.id} className="flex items-start gap-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2" />
+                  <div>
+                    <p className="text-sm text-slate-900 dark:text-white font-medium">
+                      {activity.userName ? `${activity.userName}: ${activity.action}` : activity.action}
+                    </p>
+                    <p className="text-xs text-slate-500">{timeAgo(activity.createdAt)}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">No recent activity found.</p>
+            )}
           </div>
         </div>
       </div>
