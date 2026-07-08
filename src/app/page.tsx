@@ -134,25 +134,25 @@ export default async function HomePage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 divide-x divide-slate-200 dark:divide-slate-800">
             <ScrollReveal delay={0.1} className="text-center px-4">
               <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
-                {recoveredItemsCount > 125000 ? recoveredItemsCount.toLocaleString() : "125,000+"}
+                {recoveredItemsCount.toLocaleString()}
               </div>
               <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Recovered Items</div>
             </ScrollReveal>
             <ScrollReveal delay={0.2} className="text-center px-4">
               <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
-                {usersCount > 45000 ? usersCount.toLocaleString() : "45,000+"}
+                {usersCount.toLocaleString()}
               </div>
               <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Active Users</div>
             </ScrollReveal>
             <ScrollReveal delay={0.3} className="text-center px-4">
               <div className="text-4xl md:text-5xl font-black text-emerald-500 mb-2 tracking-tight">
-                {successRate > 98 ? `${successRate}%` : "98%"}
+                {successRate}%
               </div>
               <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Success Rate</div>
             </ScrollReveal>
             <ScrollReveal delay={0.4} className="text-center px-4">
               <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
-                {countriesCount > 75 ? countriesCount : "75+"}
+                {countriesCount.toLocaleString()}
               </div>
               <div className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Countries</div>
             </ScrollReveal>
