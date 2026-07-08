@@ -95,7 +95,7 @@ export default function CMSPageEditor({ params }: { params: Promise<{ id: string
   if (!page) return <div className="p-12 text-center">Page not found</div>;
 
   return (
-    <div className="flex h-[calc(100vh-64px)] -mx-6 -my-6 bg-slate-50 dark:bg-slate-950 overflow-hidden">
+    <div className="flex h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950 overflow-hidden">
       {/* LEFT: EDITOR PANEL */}
       <div className="w-[450px] flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-full overflow-hidden">
         
