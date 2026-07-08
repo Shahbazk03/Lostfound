@@ -24,7 +24,7 @@ export function Navbar() {
   const pathname = usePathname();
 
   const hiddenPaths = ["/login", "/register", "/forgot-password", "/reset-password"];
-  if (hiddenPaths.includes(pathname)) {
+  if (hiddenPaths.includes(pathname) || pathname.startsWith("/admin")) {
     return null;
   }
 

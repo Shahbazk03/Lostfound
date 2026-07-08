@@ -27,7 +27,7 @@ import RecentListings from "@/components/RecentListings";
 import DynamicFooter from "@/components/DynamicFooter";
 import ScrollReveal from "@/components/animations/ScrollReveal";
 import { db } from "@/db";
-import { items, users, organizationSettings } from "@/db/schema";
+import { items, users, organizationSettings, cmsHero } from "@/db/schema";
 import { eq, sql, count } from "drizzle-orm";
 import { defaultFounder } from "@/lib/content-constants";
 
@@ -52,15 +52,55 @@ export default async function HomePage() {
 
   const successRate = totalItemsCount > 0 ? Math.round((recoveredItemsCount / totalItemsCount) * 100) : 0;
 
+  const [heroData] = await db.select().from(cmsHero).limit(1);
+  
+  // Defaults in case CMS data is empty
+  const hero = heroData || {
+    headline: "Find What Matters.\nReconnect With Confidence.",
+    highlightedWords: "Reconnect",
+    subheading: "LostFound helps people recover lost belongings through AI-powered matching, real-time notifications, and a trusted community network.",
+    primaryButtonText: "Browse Lost Items",
+    primaryButtonLink: "/browse",
+    secondaryButtonText: "Report Lost Item",
+    secondaryButtonLink: "/report",
+    backgroundImage: "",
+    illustrationImage: "/hero-3d-illustration.png",
+    illustrationAnimation: "float",
+    trustBadges: ["Trusted Community", "AI Powered Matching", "Secure Platform", "Global Reach"],
+  };
+
+  const renderHeadline = () => {
+    if (!hero.highlightedWords) return hero.headline;
+    
+    let result = hero.headline;
+    const words = hero.highlightedWords.split(",").map(w => w.trim());
+    
+    words.forEach(word => {
+      if (!word) return;
+      const regex = new RegExp(`(${word})`, 'gi');
+      result = result.replace(regex, `<span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500">$1</span>`);
+    });
+    
+    // Also replace \n with <br/>
+    result = result.replace(/\n/g, "<br/>");
+    return <span dangerouslySetInnerHTML={{ __html: result }} />;
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0B1120] text-slate-900 dark:text-slate-200 selection:bg-emerald-500/30 selection:text-emerald-900 dark:selection:text-emerald-200 font-sans">
       
       {/* 1. HERO SECTION */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-white dark:bg-[#0B1120] pt-20">
         {/* Abstract Background Elements */}
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-emerald-500/5 dark:bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3 pointer-events-none" />
-        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] opacity-20 dark:opacity-10 pointer-events-none" />
+        {hero.backgroundImage ? (
+           <div className="absolute inset-0 bg-cover bg-center opacity-10" style={{ backgroundImage: `url(${hero.backgroundImage})` }} />
+        ) : (
+          <>
+            <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-emerald-500/5 dark:bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3 pointer-events-none" />
+            <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] opacity-20 dark:opacity-10 pointer-events-none" />
+          </>
+        )}
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-10">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
@@ -68,57 +108,50 @@ export default async function HomePage() {
             {/* Left Column: Text */}
             <ScrollReveal animation="slide-in" className="max-w-2xl z-10 relative">
               <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-8">
-                Find What Matters. <br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-500">
-                  Reconnect
-                </span> With Confidence.
+                {renderHeadline()}
               </h1>
               <p className="text-xl text-slate-600 dark:text-slate-400 mb-10 leading-relaxed max-w-xl">
-                LostFound helps people recover lost belongings through AI-powered matching, real-time notifications, and a trusted community network.
+                {hero.subheading}
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 mb-10">
-                <Link
-                  href="/browse"
-                  className="inline-flex items-center justify-center bg-slate-900 dark:bg-emerald-500 text-white dark:text-slate-950 px-8 py-4 rounded-2xl font-bold hover:bg-slate-800 dark:hover:bg-emerald-400 transition-all shadow-xl shadow-slate-900/20 dark:shadow-emerald-500/20 hover:-translate-y-0.5"
-                >
-                  Browse Lost Items
-                </Link>
-                <Link
-                  href="/report"
-                  className="inline-flex items-center justify-center bg-white dark:bg-slate-800/50 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white px-8 py-4 rounded-2xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm hover:-translate-y-0.5"
-                >
-                  Report Lost Item
-                </Link>
+                {hero.primaryButtonText && (
+                  <Link
+                    href={hero.primaryButtonLink || "#"}
+                    className="inline-flex items-center justify-center bg-slate-900 dark:bg-emerald-500 text-white dark:text-slate-950 px-8 py-4 rounded-2xl font-bold hover:bg-slate-800 dark:hover:bg-emerald-400 transition-all shadow-xl shadow-slate-900/20 dark:shadow-emerald-500/20 hover:-translate-y-0.5"
+                  >
+                    {hero.primaryButtonText}
+                  </Link>
+                )}
+                {hero.secondaryButtonText && (
+                  <Link
+                    href={hero.secondaryButtonLink || "#"}
+                    className="inline-flex items-center justify-center bg-white dark:bg-slate-800/50 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white px-8 py-4 rounded-2xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm hover:-translate-y-0.5"
+                  >
+                    {hero.secondaryButtonText}
+                  </Link>
+                )}
               </div>
 
               {/* Trust Indicators */}
-              <div className="flex flex-wrap items-center gap-6 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-500" />
-                  Trusted Community
+              {hero.trustBadges && hero.trustBadges.length > 0 && (
+                <div className="flex flex-wrap items-center gap-6 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  {hero.trustBadges.map((badge, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-500" />
+                      {badge}
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-500" />
-                  AI Powered Matching
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-500" />
-                  Secure Platform
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-500" />
-                  Fast Recovery
-                </div>
-              </div>
+              )}
             </ScrollReveal>
 
             {/* Right Column: 3D Image */}
             <ScrollReveal animation="fade-in" delay={0.2} className="relative h-[500px] lg:h-[700px] w-full hidden md:flex items-center justify-center">
               <img 
-                src="/hero-3d-illustration.png" 
+                src={hero.illustrationImage || "/hero-3d-illustration.png"} 
                 alt="LostFound Premium Hero" 
-                className="w-full h-full object-contain drop-shadow-2xl z-10 relative animate-[float_6s_ease-in-out_infinite]" 
+                className={`w-full h-full object-contain drop-shadow-2xl z-10 relative animate-[${hero.illustrationAnimation === "none" ? "none" : hero.illustrationAnimation + "_6s_ease-in-out_infinite"}]`} 
                 style={{ filter: "drop-shadow(0 25px 35px rgba(16, 185, 129, 0.15))" }}
               />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-emerald-500/10 rounded-full animate-[spin_60s_linear_infinite]" />
