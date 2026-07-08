@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { items, users, organizationSettings, cmsHero, cmsStatistics, cmsCategories, cmsFeatures, cmsTestimonials, cmsPricingPlans, cmsGlobalNetwork, cmsFooter } from "@/db/schema";
+import { items, users, organizationSettings, cmsHero, cmsStatistics, cmsCategories, cmsFeatures, cmsTestimonials, cmsPricingPlans, cmsGlobalNetwork, cmsHomepageFaq, cmsHomepageCta, cmsFooter } from "@/db/schema";
 import { eq, sql, count, asc, desc } from "drizzle-orm";
 import HomepageVisuals from "@/components/home/HomepageVisuals";
 
@@ -29,6 +29,8 @@ export default async function HomePage() {
   const testimonialsList = await db.select().from(cmsTestimonials).orderBy(desc(cmsTestimonials.createdAt));
   const pricingPlansList = await db.select().from(cmsPricingPlans).orderBy(asc(cmsPricingPlans.orderIndex));
   const [globalNetwork] = await db.select().from(cmsGlobalNetwork).limit(1);
+  const [faq] = await db.select().from(cmsHomepageFaq).limit(1);
+  const [cta] = await db.select().from(cmsHomepageCta).limit(1);
   const [footer] = await db.select().from(cmsFooter).limit(1);
   
   // Defaults in case CMS data is empty
@@ -58,6 +60,8 @@ export default async function HomePage() {
     successRate,
     countriesCount,
     globalNetwork: globalNetwork || null,
+    faq: faq || null,
+    cta: cta || null,
     footer: footer || null
   };
 

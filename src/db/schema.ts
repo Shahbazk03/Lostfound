@@ -304,6 +304,25 @@ export const cmsGlobalNetwork = pgTable("cms_global_network", {
   isActive: boolean("is_active").default(true).notNull(),
 });
 
+export const cmsHomepageFaq = pgTable("cms_homepage_faq", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  items: jsonb("items").$type<{question: string, answer: string}[]>().default([]),
+  isActive: boolean("is_active").default(true).notNull(),
+});
+
+export const cmsHomepageCta = pgTable("cms_homepage_cta", {
+  id: serial("id").primaryKey(),
+  headline: varchar("headline", { length: 255 }).notNull(),
+  subheading: text("subheading"),
+  primaryButtonText: varchar("primary_button_text", { length: 50 }),
+  primaryButtonLink: varchar("primary_button_link", { length: 255 }),
+  secondaryButtonText: varchar("secondary_button_text", { length: 50 }),
+  secondaryButtonLink: varchar("secondary_button_link", { length: 255 }),
+  isActive: boolean("is_active").default(true).notNull(),
+});
+
 export const cmsFooter = pgTable("cms_footer", {
   id: serial("id").primaryKey(),
   logo: text("logo"),

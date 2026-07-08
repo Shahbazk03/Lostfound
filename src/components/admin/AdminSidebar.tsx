@@ -23,7 +23,13 @@ import {
   LogOut,
   Bell,
   Ticket,
-  Briefcase
+  Briefcase,
+  HelpCircle,
+  Megaphone,
+  Layers,
+  Target,
+  Component,
+  PanelBottom
 } from "lucide-react";
 import { useState } from "react";
 import clsx from "clsx";
@@ -49,6 +55,8 @@ const sidebarLinks = [
       { title: "Premium Plans", href: "/admin/cms/homepage/premium" },
       { title: "Recent Items", href: "/admin/cms/homepage/recent-items" },
       { title: "Global Network", href: "/admin/cms/homepage/global-network" },
+      { title: "Homepage FAQ", href: "/admin/cms/homepage/faq" },
+      { title: "Final CTA", href: "/admin/cms/homepage/cta" },
       { title: "Footer", href: "/admin/cms/homepage/footer" },
     ]
   },

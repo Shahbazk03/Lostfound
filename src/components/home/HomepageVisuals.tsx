@@ -40,6 +40,8 @@ export interface HomepageData {
   successRate: number;
   countriesCount: number;
   globalNetwork?: any;
+  faq?: any;
+  cta?: any;
   footer?: any;
 }
 
@@ -56,6 +58,8 @@ export default function HomepageVisuals({ data }: { data: HomepageData }) {
     successRate,
     countriesCount,
     globalNetwork,
+    faq,
+    cta,
     footer
   } = data;
 
@@ -535,25 +539,63 @@ export default function HomepageVisuals({ data }: { data: HomepageData }) {
         </div>
       </section>
 
-      {/* 10. FINAL CTA */}
-      <section className="py-24 relative overflow-hidden bg-emerald-600 dark:bg-emerald-900">
-        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10" />
-        <div className="max-w-4xl mx-auto px-4 relative z-10 text-center">
-          <ScrollReveal>
-            <h2 className="text-4xl md:text-6xl font-extrabold text-white mb-8 tracking-tight">
-              Ready to Find What You've Lost?
-            </h2>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/browse" className="bg-white text-emerald-900 px-10 py-4 rounded-xl font-bold hover:bg-slate-50 transition-colors shadow-xl">
-                Browse Items
-              </Link>
-              <Link href="/report" className="bg-emerald-800 dark:bg-emerald-950 text-white border border-emerald-500 dark:border-emerald-700 px-10 py-4 rounded-xl font-bold hover:bg-emerald-700 dark:hover:bg-emerald-800 transition-colors shadow-xl">
-                Report Item
-              </Link>
+      {/* 9.5. FAQ SECTION */}
+      {(!faq || faq.isActive !== false) && (faq?.items?.length > 0) && (
+        <section className="py-24 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ScrollReveal className="text-center mb-16">
+              <h2 className="text-3xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-6">
+                {faq.title || "Frequently Asked Questions"}
+              </h2>
+              {faq.description && (
+                <p className="text-xl text-slate-600 dark:text-slate-400">
+                  {faq.description}
+                </p>
+              )}
+            </ScrollReveal>
+
+            <div className="space-y-6">
+              {faq.items.map((item: any, i: number) => (
+                <ScrollReveal key={i} delay={i * 0.1} className="bg-white dark:bg-slate-950 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">{item.question}</h3>
+                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line">{item.answer}</p>
+                </ScrollReveal>
+              ))}
             </div>
-          </ScrollReveal>
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
+
+      {/* 10. FINAL CTA */}
+      {(!cta || cta.isActive !== false) && (
+        <section className="py-24 relative overflow-hidden bg-emerald-600 dark:bg-emerald-900">
+          <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-10" />
+          <div className="max-w-4xl mx-auto px-4 relative z-10 text-center">
+            <ScrollReveal>
+              <h2 className="text-4xl md:text-6xl font-extrabold text-white mb-8 tracking-tight">
+                {cta?.headline || "Ready to Find What You've Lost?"}
+              </h2>
+              {cta?.subheading && (
+                <p className="text-xl text-emerald-100 mb-10 max-w-2xl mx-auto">
+                  {cta.subheading}
+                </p>
+              )}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                {(cta?.primaryButtonText || "Browse Items") && (
+                  <Link href={cta?.primaryButtonLink || "/browse"} className="bg-white text-emerald-900 px-10 py-4 rounded-xl font-bold hover:bg-slate-50 transition-colors shadow-xl">
+                    {cta?.primaryButtonText || "Browse Items"}
+                  </Link>
+                )}
+                {(cta?.secondaryButtonText || "Report Item") && (
+                  <Link href={cta?.secondaryButtonLink || "/report"} className="bg-emerald-800 dark:bg-emerald-950 text-white border border-emerald-500 dark:border-emerald-700 px-10 py-4 rounded-xl font-bold hover:bg-emerald-700 dark:hover:bg-emerald-800 transition-colors shadow-xl">
+                    {cta?.secondaryButtonText || "Report Item"}
+                  </Link>
+                )}
+              </div>
+            </ScrollReveal>
+          </div>
+        </section>
+      )}
 
       {/* 11. PREMIUM FOOTER */}
       <DynamicFooter footerData={footer} />

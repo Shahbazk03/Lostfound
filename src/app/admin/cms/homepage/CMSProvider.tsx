@@ -12,6 +12,8 @@ interface CMSContextType {
   updateTestimonials: (newList: any[]) => void;
   updatePricing: (newList: any[]) => void;
   updateGlobalNetwork: (newData: any) => void;
+  updateFaq: (newData: any) => void;
+  updateCta: (newData: any) => void;
   updateFooter: (newData: any) => void;
 }
 
@@ -48,6 +50,14 @@ export function CMSProvider({ children, initialData }: { children: ReactNode, in
     setData(prev => ({ ...prev, globalNetwork: { ...prev.globalNetwork, ...newData } }));
   };
 
+  const updateFaq = (newData: any) => {
+    setData(prev => ({ ...prev, faq: { ...prev.faq, ...newData } }));
+  };
+
+  const updateCta = (newData: any) => {
+    setData(prev => ({ ...prev, cta: { ...prev.cta, ...newData } }));
+  };
+
   const updateFooter = (newData: any) => {
     setData(prev => ({ ...prev, footer: { ...prev.footer, ...newData } }));
   };
@@ -62,6 +72,8 @@ export function CMSProvider({ children, initialData }: { children: ReactNode, in
       updateTestimonials,
       updatePricing,
       updateGlobalNetwork,
+      updateFaq,
+      updateCta,
       updateFooter
     }}>
       {children}
