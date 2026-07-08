@@ -46,7 +46,7 @@ export default async function HomePage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-200 selection:bg-emerald-500/30 selection:text-emerald-200">
       
       {/* Hero Section */}
-      <section className="relative min-h-[85vh] flex items-center overflow-x-hidden overflow-y-visible bg-white dark:bg-slate-950 pt-20">
+      <section className="relative min-h-[85vh] flex items-center overflow-hidden bg-white dark:bg-slate-950 pt-20">
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -88,7 +88,7 @@ export default async function HomePage() {
               <img 
                 src="/hero-3d-illustration.png" 
                 alt="LostFound Hero Illustration" 
-                className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal z-10 relative scale-105" 
+                className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal z-10 relative" 
               />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-emerald-100 dark:border-emerald-900/30 rounded-full" />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] border border-emerald-50 dark:border-emerald-900/10 rounded-full" />
