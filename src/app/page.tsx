@@ -46,52 +46,52 @@ export default async function HomePage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-200 selection:bg-emerald-500/30 selection:text-emerald-200">
       
       {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden">
-        {/* Abstract Background Glows */}
-        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-blue-500/10 rounded-full blur-[150px] pointer-events-none translate-x-1/3 translate-y-1/3" />
+      <section className="relative min-h-[85vh] flex items-center overflow-hidden bg-white dark:bg-slate-950 pt-20">
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             
             {/* Left Column: Text */}
-            <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 backdrop-blur-md text-emerald-400 px-4 py-1.5 rounded-full text-sm font-semibold tracking-wide mb-6">
-                <Globe className="w-4 h-4" />
-                Global Recovery Network
-              </div>
-              <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.1] mb-6">
-                Connect With What <br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
-                  Matters Most.
-                </span>
+            <div className="max-w-2xl z-10 relative">
+              <h1 className="text-6xl md:text-[5.5rem] font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.05] mb-6">
+                Find What Matters. <br/>
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  Reunite
+                </span> With Confidence.
               </h1>
-              <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 mb-10 leading-relaxed font-light">
-                The enterprise-grade platform for global item recovery. 
-                Report lost assets, register found valuables, and securely facilitate returns through our verified global network.
+              <p className="text-lg md:text-xl text-slate-500 dark:text-slate-400 mb-10 leading-relaxed font-medium">
+                LostFound helps you find lost items or help others recover theirs. 
+                Join our global community and make a difference.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Link
-                  href="/report"
-                  className="inline-flex items-center justify-center gap-2 bg-emerald-500 text-slate-950 px-8 py-4 rounded-xl font-bold hover:bg-emerald-400 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/20"
-                >
-                  <PlusCircle className="w-5 h-5" />
-                  Report Item
-                </Link>
+              <div className="flex flex-col sm:flex-row gap-4 mb-8">
                 <Link
                   href="/browse"
-                  className="inline-flex items-center justify-center gap-2 bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white backdrop-blur-md px-8 py-4 rounded-xl font-bold hover:bg-slate-100 dark:bg-slate-800 transition-all hover:border-slate-600"
+                  className="inline-flex items-center justify-center bg-emerald-600 text-white px-8 py-3.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-600/20"
                 >
-                  <Search className="w-5 h-5" />
-                  Browse Directory
+                  Browse Items
                 </Link>
+                <Link
+                  href="/report"
+                  className="inline-flex items-center justify-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 px-8 py-3.5 rounded-lg font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
+                >
+                  Report an Item
+                </Link>
+              </div>
+              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm font-medium">
+                <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
+                Trusted by thousands. Safe, secure & reliable.
               </div>
             </div>
 
-            {/* Right Column: 3D Scene */}
-            <div className="relative h-[500px] lg:h-[700px] w-full hidden md:block">
-              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/5 to-blue-500/5 rounded-full blur-3xl" />
-              <Hero3D />
+            {/* Right Column: 3D Image */}
+            <div className="relative h-[400px] lg:h-[600px] w-full hidden md:flex items-center justify-center">
+              <img 
+                src="/hero-3d-illustration.png" 
+                alt="LostFound Hero Illustration" 
+                className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal z-10 relative scale-110" 
+              />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-emerald-100 dark:border-emerald-900/30 rounded-full" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] border border-emerald-50 dark:border-emerald-900/10 rounded-full" />
             </div>
 
           </div>
@@ -109,7 +109,57 @@ export default async function HomePage() {
               </Link>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Why Choose LostFound Section */}
+      <section className="py-24 bg-slate-50 dark:bg-slate-900/30 border-y border-slate-200 dark:border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+              Why Choose LostFound?
+            </h2>
+          </div>
           
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-start hover:shadow-md transition-shadow">
+              <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
+                <Search className="w-8 h-8 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                Unlimited Searches
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400 font-medium">
+                Search without limits and find what you're looking for.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-start hover:shadow-md transition-shadow">
+              <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
+                <div className="relative">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 dark:text-emerald-400"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                Priority Support
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400 font-medium">
+                Get faster assistance from our dedicated support team.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-start hover:shadow-md transition-shadow">
+              <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
+                <Shield className="w-8 h-8 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                Ad-Free Experience
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400 font-medium">
+                Enjoy a clean, distraction-free experience while you search.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 

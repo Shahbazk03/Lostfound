@@ -34,10 +34,8 @@ export function Navbar() {
         <div className="px-6 lg:px-8">
           <div className="flex justify-between h-16">
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.5)]">
-                <span className="text-white font-bold text-sm tracking-wider">LF</span>
-              </div>
+            <Link href="/" className="flex items-center gap-1.5">
+              <span className="text-3xl font-black text-emerald-600 tracking-tighter">LF</span>
               <span className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">LOSTFOUND</span>
             </Link>
             <div className="hidden md:flex items-center gap-6">
@@ -66,7 +64,6 @@ export function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
-            <ThemeToggle />
             {user ? (
               <>
                 <Link
