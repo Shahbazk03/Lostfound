@@ -209,6 +209,13 @@ export default function CMSPageEditor({ params }: { params: Promise<{ id: string
                   <button onClick={() => addBlock('rich-text')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Rich Text</button>
                   <button onClick={() => addBlock('feature-grid')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Feature Grid</button>
                   <button onClick={() => addBlock('faq')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">FAQ List</button>
+                  <button onClick={() => addBlock('statistics')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Statistics</button>
+                  <button onClick={() => addBlock('testimonials')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Testimonials</button>
+                  <button onClick={() => addBlock('team')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Team</button>
+                  <button onClick={() => addBlock('logo-cloud')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Logo Cloud</button>
+                  <button onClick={() => addBlock('timeline')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Timeline</button>
+                  <button onClick={() => addBlock('gallery')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Gallery</button>
+                  <button onClick={() => addBlock('cta')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">CTA</button>
                   <button onClick={() => addBlock('contact-form')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Contact Form</button>
                   <button onClick={() => addBlock('divider')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Divider</button>
                 </div>
@@ -243,6 +250,13 @@ function getDefaultContentForBlock(type: string) {
     case 'feature-grid': return { title: "Why Choose Us", features: [{title: "Fast", description: "Lightning fast performance"}, {title: "Secure", description: "Bank-level security"}] };
     case 'faq': return { title: "Frequently Asked Questions", items: [{question: "How does this work?", answer: "It is very simple..."}] };
     case 'contact-form': return { title: "Contact Us", subtitle: "We'd love to hear from you." };
+    case 'statistics': return { title: "Our Impact", stats: [{ value: "10", prefix: "", suffix: "k+", label: "Users" }] };
+    case 'testimonials': return { title: "What people say", items: [{ name: "Jane Doe", role: "Customer", story: "Great experience!", avatar: "" }] };
+    case 'team': return { title: "Our Team", members: [{ name: "John Doe", role: "CEO", bio: "Leading the vision." }] };
+    case 'logo-cloud': return { title: "Trusted By", logos: [{ url: "https://via.placeholder.com/150", alt: "Logo" }] };
+    case 'timeline': return { title: "Our History", events: [{ year: "2023", title: "Founded", description: "The beginning." }] };
+    case 'gallery': return { title: "Gallery", images: [{ url: "https://via.placeholder.com/400", caption: "Photo 1" }] };
+    case 'cta': return { headline: "Ready to start?", subheading: "Join us today.", buttonText: "Sign Up", buttonLink: "/" };
     default: return {};
   }
 }
@@ -336,5 +350,147 @@ function renderBlockEditor(block: any, index: number, updateFn: (idx: number, ke
     );
   }
 
+  if (block.type === 'statistics') {
+    return (
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
+        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
+        <label className="block text-xs text-slate-500 mb-1">Stats</label>
+        {content.stats?.map((stat: any, i: number) => (
+          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
+            <div className="grid grid-cols-3 gap-1 mb-1">
+              <input type="text" value={stat.prefix || ""} onChange={e => { const n = [...content.stats]; n[i].prefix = e.target.value; updateFn(index, 'stats', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Prefix" />
+              <input type="text" value={stat.value || ""} onChange={e => { const n = [...content.stats]; n[i].value = e.target.value; updateFn(index, 'stats', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Value" />
+              <input type="text" value={stat.suffix || ""} onChange={e => { const n = [...content.stats]; n[i].suffix = e.target.value; updateFn(index, 'stats', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Suffix" />
+            </div>
+            <input type="text" value={stat.label || ""} onChange={e => { const n = [...content.stats]; n[i].label = e.target.value; updateFn(index, 'stats', n); }} className="w-full bg-transparent border-b border-slate-100 dark:border-slate-800 px-1 py-1 text-sm focus:outline-none" placeholder="Label" />
+            <button onClick={() => { const n = [...content.stats]; n.splice(i, 1); updateFn(index, 'stats', n); }} className="text-xs text-rose-500 mt-1">Remove</button>
+          </div>
+        ))}
+        <button onClick={() => { const n = [...(content.stats || []), { value: "100", label: "New Stat" }]; updateFn(index, 'stats', n); }} className="text-xs text-emerald-600 font-medium">+ Add Stat</button>
+      </div>
+    );
+  }
+
+  if (block.type === 'testimonials') {
+    return (
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
+        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
+        <label className="block text-xs text-slate-500 mb-1">Testimonials</label>
+        {content.items?.map((item: any, i: number) => (
+          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex flex-col gap-1">
+            <input type="text" value={item.name || ""} onChange={e => { const n = [...content.items]; n[i].name = e.target.value; updateFn(index, 'items', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Name" />
+            <input type="text" value={item.role || ""} onChange={e => { const n = [...content.items]; n[i].role = e.target.value; updateFn(index, 'items', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Role" />
+            <textarea value={item.story || ""} onChange={e => { const n = [...content.items]; n[i].story = e.target.value; updateFn(index, 'items', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Story" rows={2} />
+            <input type="text" value={item.avatar || ""} onChange={e => { const n = [...content.items]; n[i].avatar = e.target.value; updateFn(index, 'items', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Avatar URL" />
+            <button onClick={() => { const n = [...content.items]; n.splice(i, 1); updateFn(index, 'items', n); }} className="text-xs text-rose-500 self-start">Remove</button>
+          </div>
+        ))}
+        <button onClick={() => { const n = [...(content.items || []), { name: "New Person", story: "Great!" }]; updateFn(index, 'items', n); }} className="text-xs text-emerald-600 font-medium">+ Add Testimonial</button>
+      </div>
+    );
+  }
+
+  if (block.type === 'team') {
+    return (
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
+        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
+        <label className="block text-xs text-slate-500 mb-1">Team Members</label>
+        {content.members?.map((member: any, i: number) => (
+          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex flex-col gap-1">
+            <input type="text" value={member.name || ""} onChange={e => { const n = [...content.members]; n[i].name = e.target.value; updateFn(index, 'members', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Name" />
+            <input type="text" value={member.role || ""} onChange={e => { const n = [...content.members]; n[i].role = e.target.value; updateFn(index, 'members', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Role" />
+            <input type="text" value={member.photo || ""} onChange={e => { const n = [...content.members]; n[i].photo = e.target.value; updateFn(index, 'members', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Photo URL" />
+            <textarea value={member.bio || ""} onChange={e => { const n = [...content.members]; n[i].bio = e.target.value; updateFn(index, 'members', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Bio" />
+            <button onClick={() => { const n = [...content.members]; n.splice(i, 1); updateFn(index, 'members', n); }} className="text-xs text-rose-500 self-start">Remove</button>
+          </div>
+        ))}
+        <button onClick={() => { const n = [...(content.members || []), { name: "Name" }]; updateFn(index, 'members', n); }} className="text-xs text-emerald-600 font-medium">+ Add Member</button>
+      </div>
+    );
+  }
+
+  if (block.type === 'logo-cloud') {
+    return (
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
+        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
+        <label className="block text-xs text-slate-500 mb-1">Logos</label>
+        {content.logos?.map((logo: any, i: number) => (
+          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex gap-2 items-center">
+            <input type="text" value={logo.url || ""} onChange={e => { const n = [...content.logos]; n[i].url = e.target.value; updateFn(index, 'logos', n); }} className="flex-1 bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Image URL" />
+            <button onClick={() => { const n = [...content.logos]; n.splice(i, 1); updateFn(index, 'logos', n); }} className="text-xs text-rose-500">Remove</button>
+          </div>
+        ))}
+        <button onClick={() => { const n = [...(content.logos || []), { url: "" }]; updateFn(index, 'logos', n); }} className="text-xs text-emerald-600 font-medium">+ Add Logo</button>
+      </div>
+    );
+  }
+
+  if (block.type === 'timeline') {
+    return (
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
+        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
+        <label className="block text-xs text-slate-500 mb-1">Events</label>
+        {content.events?.map((event: any, i: number) => (
+          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex flex-col gap-1">
+            <input type="text" value={event.year || ""} onChange={e => { const n = [...content.events]; n[i].year = e.target.value; updateFn(index, 'events', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Year / Date" />
+            <input type="text" value={event.title || ""} onChange={e => { const n = [...content.events]; n[i].title = e.target.value; updateFn(index, 'events', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Title" />
+            <textarea value={event.description || ""} onChange={e => { const n = [...content.events]; n[i].description = e.target.value; updateFn(index, 'events', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Description" />
+            <button onClick={() => { const n = [...content.events]; n.splice(i, 1); updateFn(index, 'events', n); }} className="text-xs text-rose-500 self-start">Remove</button>
+          </div>
+        ))}
+        <button onClick={() => { const n = [...(content.events || []), { year: "2024", title: "New Event" }]; updateFn(index, 'events', n); }} className="text-xs text-emerald-600 font-medium">+ Add Event</button>
+      </div>
+    );
+  }
+
+  if (block.type === 'gallery') {
+    return (
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
+        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
+        <label className="block text-xs text-slate-500 mb-1">Images</label>
+        {content.images?.map((img: any, i: number) => (
+          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex flex-col gap-1">
+            <input type="text" value={img.url || ""} onChange={e => { const n = [...content.images]; n[i].url = e.target.value; updateFn(index, 'images', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Image URL" />
+            <input type="text" value={img.caption || ""} onChange={e => { const n = [...content.images]; n[i].caption = e.target.value; updateFn(index, 'images', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Caption (optional)" />
+            <button onClick={() => { const n = [...content.images]; n.splice(i, 1); updateFn(index, 'images', n); }} className="text-xs text-rose-500 self-start">Remove</button>
+          </div>
+        ))}
+        <button onClick={() => { const n = [...(content.images || []), { url: "" }]; updateFn(index, 'images', n); }} className="text-xs text-emerald-600 font-medium">+ Add Image</button>
+      </div>
+    );
+  }
+
+  if (block.type === 'cta') {
+    return (
+      <>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Headline</label>
+          <input type="text" value={content.headline || ""} onChange={e => updateFn(index, 'headline', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Subheading</label>
+          <input type="text" value={content.subheading || ""} onChange={e => updateFn(index, 'subheading', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Button Text</label>
+            <input type="text" value={content.buttonText || ""} onChange={e => updateFn(index, 'buttonText', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-1" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Button Link</label>
+            <input type="text" value={content.buttonLink || ""} onChange={e => updateFn(index, 'buttonLink', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return <div className="text-sm text-slate-500">Edit options not available for this block yet.</div>;
 }
+
