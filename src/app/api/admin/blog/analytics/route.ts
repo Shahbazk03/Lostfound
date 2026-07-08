@@ -1,0 +1,36 @@
+import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { blogPosts, blogCategories, blogTags, blogComments } from "@/db/schema";
+import { requireAdmin } from "@/lib/auth";
+import { sql, eq } from "drizzle-orm";
+
+export async function GET() {
+  try {
+    await requireAdmin();
+
+    const [totalPostsResult] = await db.select({ count: sql<number>`count(*)` }).from(blogPosts);
+    const [publishedPostsResult] = await db.select({ count: sql<number>`count(*)` }).from(blogPosts).where(eq(blogPosts.status, "published"));
+    const [draftPostsResult] = await db.select({ count: sql<number>`count(*)` }).from(blogPosts).where(eq(blogPosts.status, "draft"));
+    const [scheduledPostsResult] = await db.select({ count: sql<number>`count(*)` }).from(blogPosts).where(eq(blogPosts.status, "scheduled"));
+    
+    const [totalCategoriesResult] = await db.select({ count: sql<number>`count(*)` }).from(blogCategories);
+    const [totalTagsResult] = await db.select({ count: sql<number>`count(*)` }).from(blogTags);
+    const [totalCommentsResult] = await db.select({ count: sql<number>`count(*)` }).from(blogComments);
+    
+    const [totalViewsResult] = await db.select({ sum: sql<number>`sum(${blogPosts.views})` }).from(blogPosts);
+
+    return NextResponse.json({
+      totalPosts: totalPostsResult?.count || 0,
+      publishedPosts: publishedPostsResult?.count || 0,
+      draftPosts: draftPostsResult?.count || 0,
+      scheduledPosts: scheduledPostsResult?.count || 0,
+      totalCategories: totalCategoriesResult?.count || 0,
+      totalTags: totalTagsResult?.count || 0,
+      totalComments: totalCommentsResult?.count || 0,
+      totalViews: totalViewsResult?.sum || 0,
+    });
+  } catch (error) {
+    console.error("GET Analytics Error:", error);
+    return NextResponse.json({ error: "Failed to fetch analytics" }, { status: 500 });
+  }
+}

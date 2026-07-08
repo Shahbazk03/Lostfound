@@ -35,6 +35,21 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "incomplete",
 ]);
 
+export const blogPostStatusEnum = pgEnum("blog_post_status", [
+  "draft",
+  "review",
+  "scheduled",
+  "published",
+  "archived",
+]);
+
+export const blogCommentStatusEnum = pgEnum("blog_comment_status", [
+  "pending",
+  "approved",
+  "spam",
+  "rejected",
+]);
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: varchar("email", { length: 255 }).notNull().unique(),
@@ -422,4 +437,83 @@ export type CmsPageBlock = typeof cmsPageBlocks.$inferSelect;
 export type NewCmsPageBlock = typeof cmsPageBlocks.$inferInsert;
 export type CmsPageVersion = typeof cmsPageVersions.$inferSelect;
 export type NewCmsPageVersion = typeof cmsPageVersions.$inferInsert;
+
+export const blogCategories = pgTable("blog_categories", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  color: varchar("color", { length: 50 }).default("#059669"),
+  description: text("description"),
+  featuredImage: text("featured_image"),
+  seoTitle: varchar("seo_title", { length: 255 }),
+  seoDescription: text("seo_description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const blogTags = pgTable("blog_tags", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const blogPosts = pgTable("blog_posts", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  excerpt: text("excerpt"),
+  content: text("content"),
+  featuredImage: text("featured_image"),
+  galleryImages: jsonb("gallery_images").$type<string[]>().default([]),
+  authorId: integer("author_id").references(() => users.id, { onDelete: "set null" }),
+  categoryId: integer("category_id").references(() => blogCategories.id, { onDelete: "set null" }),
+  status: blogPostStatusEnum("status").default("draft").notNull(),
+  featured: boolean("featured").default(false).notNull(),
+  allowComments: boolean("allow_comments").default(true).notNull(),
+  readingTime: integer("reading_time").default(0), // in minutes
+  views: integer("views").default(0).notNull(),
+  likes: integer("likes").default(0).notNull(),
+  seoTitle: varchar("seo_title", { length: 255 }),
+  seoDescription: text("seo_description"),
+  seoKeywords: text("seo_keywords"),
+  canonicalUrl: varchar("canonical_url", { length: 255 }),
+  scheduledAt: timestamp("scheduled_at"),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const blogPostTags = pgTable("blog_post_tags", {
+  postId: integer("post_id").notNull().references(() => blogPosts.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id").notNull().references(() => blogTags.id, { onDelete: "cascade" }),
+});
+
+export const blogComments = pgTable("blog_comments", {
+  id: serial("id").primaryKey(),
+  postId: integer("post_id").notNull().references(() => blogPosts.id, { onDelete: "cascade" }),
+  parentCommentId: integer("parent_comment_id"),
+  authorName: varchar("author_name", { length: 255 }).notNull(),
+  authorEmail: varchar("author_email", { length: 255 }).notNull(),
+  authorWebsite: varchar("author_website", { length: 255 }),
+  message: text("message").notNull(),
+  status: blogCommentStatusEnum("status").default("pending").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const blogRevisions = pgTable("blog_revisions", {
+  id: serial("id").primaryKey(),
+  postId: integer("post_id").notNull().references(() => blogPosts.id, { onDelete: "cascade" }),
+  snapshot: jsonb("snapshot").notNull(),
+  authorId: integer("author_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const blogViews = pgTable("blog_views", {
+  id: serial("id").primaryKey(),
+  postId: integer("post_id").notNull().references(() => blogPosts.id, { onDelete: "cascade" }),
+  ipHash: varchar("ip_hash", { length: 255 }),
+  userAgent: text("user_agent"),
+  viewedAt: timestamp("viewed_at").defaultNow().notNull(),
+});
 
