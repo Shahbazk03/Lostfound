@@ -377,12 +377,12 @@ export default async function HomePage() {
                   <div className="flex text-amber-400 mb-6 gap-1">
                     {[...Array(5)].map((_, j) => <Star key={j} className={`w-5 h-5 ${j < testimonial.rating ? "fill-current" : "text-slate-200 dark:text-slate-700"}`} />)}
                   </div>
-                  <p className="text-lg text-slate-700 dark:text-slate-300 italic mb-8 flex-grow">"{testimonial.reviewText}"</p>
+                  <p className="text-lg text-slate-700 dark:text-slate-300 italic mb-8 flex-grow">"{testimonial.review}"</p>
                   <div className="flex items-center gap-4 mt-auto">
-                    {testimonial.customerPhoto ? (
+                    {testimonial.avatar ? (
                       <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={testimonial.customerPhoto} alt={testimonial.customerName} className="w-full h-full object-cover" />
+                        <img src={testimonial.avatar} alt={testimonial.customerName} className="w-full h-full object-cover" />
                       </div>
                     ) : (
                       <div className="w-12 h-12 bg-emerald-200 dark:bg-emerald-900 rounded-full flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-200 text-xl">
@@ -391,7 +391,7 @@ export default async function HomePage() {
                     )}
                     <div>
                       <h4 className="font-bold text-slate-900 dark:text-white">{testimonial.customerName}</h4>
-                      <span className="text-sm text-slate-500 dark:text-slate-400">{testimonial.customerRole}</span>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">{testimonial.position}</span>
                     </div>
                   </div>
                 </ScrollReveal>
@@ -482,12 +482,12 @@ export default async function HomePage() {
                     <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
                     <p className="text-slate-400 text-sm mb-6 h-10">{plan.description}</p>
                     <div className="flex items-baseline gap-2 mb-8">
-                      <span className="text-5xl font-extrabold text-white">{plan.price}</span>
-                      <span className="text-slate-400 font-medium">{plan.period}</span>
+                      <span className="text-5xl font-extrabold text-white">${(plan.monthlyPrice / 100).toFixed(0)}</span>
+                      <span className="text-slate-400 font-medium">/month</span>
                     </div>
                     
                     <ul className="space-y-4 mb-10 flex-grow">
-                      {(plan.features as string[]).map((feat, i) => (
+                      {(plan.benefits as string[] || []).map((feat, i) => (
                         <li key={i} className="flex items-start gap-3 text-slate-300">
                           <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                           <span className="font-medium text-sm">{feat}</span>

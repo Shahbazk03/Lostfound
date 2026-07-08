@@ -16,13 +16,14 @@ export async function savePricingPlans(plans: any[]) {
     await db.insert(cmsPricingPlans).values(
       plans.map((p, idx) => ({
         name: p.name,
-        price: p.price,
-        period: p.period || "",
+        monthlyPrice: parseInt(p.price) || 0,
+        yearlyPrice: parseInt(p.price) * 10 || 0,
         description: p.description || "",
-        features: p.features || [],
+        benefits: p.features || [],
         buttonText: p.buttonText || "Get Started",
         buttonLink: p.buttonLink || "/register",
         isPopular: p.isPopular ?? false,
+        gradientClass: p.isPopular ? "from-emerald-500 to-teal-400" : "",
         orderIndex: idx,
         isActive: p.isActive ?? true,
       }))

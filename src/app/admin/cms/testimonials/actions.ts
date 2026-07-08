@@ -6,7 +6,7 @@ import { eq, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getTestimonials() {
-  return await db.select().from(cmsTestimonials).orderBy(asc(cmsTestimonials.orderIndex));
+  return await db.select().from(cmsTestimonials).orderBy(asc(cmsTestimonials.id));
 }
 
 export async function saveTestimonials(testimonials: any[]) {
@@ -16,11 +16,10 @@ export async function saveTestimonials(testimonials: any[]) {
     await db.insert(cmsTestimonials).values(
       testimonials.map((t, idx) => ({
         customerName: t.customerName,
-        customerRole: t.customerRole || "",
-        customerPhoto: t.customerPhoto || "",
-        reviewText: t.reviewText,
+        position: t.customerRole || "",
+        avatar: t.customerPhoto || "",
+        review: t.reviewText,
         rating: t.rating ?? 5,
-        orderIndex: idx,
         isActive: t.isActive ?? true,
       }))
     );

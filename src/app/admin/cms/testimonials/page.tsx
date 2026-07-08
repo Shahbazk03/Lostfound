@@ -13,7 +13,13 @@ export default function TestimonialsCMSPage() {
 
   useEffect(() => {
     getTestimonials().then((data) => {
-      setTestimonials(data || []);
+      const formatted = (data || []).map((t: any) => ({
+        ...t,
+        customerRole: t.position || "",
+        customerPhoto: t.avatar || "",
+        reviewText: t.review || "",
+      }));
+      setTestimonials(formatted);
       setLoading(false);
     });
   }, []);

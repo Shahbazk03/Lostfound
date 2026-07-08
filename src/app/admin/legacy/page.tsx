@@ -1,7 +1,7 @@
 "use client";
 
 import { LoadingLogo } from "@/components/LoadingLogo";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
@@ -160,7 +160,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
-export default function AdminDashboard() {
+function AdminDashboardInner() {
   const { user } = useAuth();
   const { settings: globalSettings, refreshSettings } = useSettings();
   const router = useRouter();
@@ -1087,5 +1087,13 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen"><LoadingLogo /></div>}>
+      <AdminDashboardInner />
+    </Suspense>
   );
 }

@@ -13,7 +13,12 @@ export default function PricingCMSPage() {
 
   useEffect(() => {
     getPricingPlans().then((data) => {
-      setPlans(data || []);
+      const formatted = (data || []).map((p: any) => ({
+        ...p,
+        price: p.monthlyPrice.toString(),
+        features: p.benefits || [],
+      }));
+      setPlans(formatted);
       setLoading(false);
     });
   }, []);
