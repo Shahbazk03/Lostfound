@@ -59,6 +59,8 @@ export const users = pgTable("users", {
   avatar: text("avatar"),
   role: userRoleEnum("role").default("user").notNull(),
   verified: boolean("verified").default(false).notNull(),
+  bio: text("bio"),
+  position: varchar("position", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
