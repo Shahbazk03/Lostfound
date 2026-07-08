@@ -88,7 +88,7 @@ export default async function HomePage() {
               <img 
                 src="/hero-3d-illustration.png" 
                 alt="LostFound Hero Illustration" 
-                className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal z-10 relative scale-110" 
+                className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal z-10 relative p-8" 
               />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-emerald-100 dark:border-emerald-900/30 rounded-full" />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] border border-emerald-50 dark:border-emerald-900/10 rounded-full" />
