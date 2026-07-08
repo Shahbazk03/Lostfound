@@ -41,9 +41,25 @@ export async function GET() {
       userEarnings[p.currency] = (userEarnings[p.currency] || 0) + p.amount;
     });
 
+    const itemsCountResult = await db
+      .select({
+        userId: items.userId,
+        count: sql<number>`count(*)`.mapWith(Number)
+      })
+      .from(items)
+      .groupBy(items.userId);
+
+    const itemsCountMap = new Map<number, number>();
+    itemsCountResult.forEach(row => {
+      itemsCountMap.set(row.userId, row.count);
+    });
+
     const usersWithEarnings = allUsers.map(user => ({
       ...user,
-      totalEarned: earningsMap.get(user.id) || { USD: 0 }
+      totalEarned: earningsMap.get(user.id) || { USD: 0 },
+      _count: {
+        items: itemsCountMap.get(user.id) || 0
+      }
     }));
 
     return NextResponse.json({ users: usersWithEarnings });
