@@ -39,6 +39,7 @@ const sidebarLinks = [
     title: "Website CMS",
     icon: Globe,
     sublinks: [
+      { title: "All Pages", href: "/admin/cms/pages" },
       { title: "Homepage", href: "/admin/cms/homepage" },
       { title: "Hero Section", href: "/admin/cms/homepage/hero" },
       { title: "Statistics", href: "/admin/cms/homepage/statistics" },
