@@ -96,19 +96,7 @@ export default async function HomePage() {
 
           </div>
 
-          {/* Advertisement Image Banner - Full Width (Below Hero) */}
-          {(settings?.metadata?.heroAdImageUrl || "/premium-ad-banner.png") && (
-            <div className="mt-16 w-full">
-              <Link href={settings?.metadata?.heroAdLinkUrl || "#"} target="_blank" className="relative w-full overflow-hidden rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800/50 group cursor-pointer transition-all hover:shadow-emerald-500/20 hover:border-emerald-500/50 block bg-slate-900/5 dark:bg-slate-900/50">
-                <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
-                <img 
-                  src={settings?.metadata?.heroAdImageUrl || "/premium-ad-banner.png"} 
-                  alt="Advertisement" 
-                  className="w-full h-auto object-cover max-h-[250px] transform group-hover:scale-[1.01] transition-transform duration-700" 
-                />
-              </Link>
-            </div>
-          )}
+
         </div>
       </section>
 
