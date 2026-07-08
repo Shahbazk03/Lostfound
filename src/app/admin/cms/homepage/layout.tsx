@@ -1,93 +1,57 @@
-"use client";
-
 import { ReactNode } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import clsx from "clsx";
-import { Layout, Type, PieChart, Grid, Star, CreditCard, Clock, Globe2, HelpCircle, ArrowUpRight } from "lucide-react";
+import { db } from "@/db";
+import { items, users, cmsHero, cmsStatistics, cmsCategories, cmsFeatures, cmsTestimonials, cmsPricingPlans, cmsGlobalNetwork, cmsFooter } from "@/db/schema";
+import { count, asc, desc } from "drizzle-orm";
+import CMSLayoutClient from "./CMSLayoutClient";
+import { CMSProvider } from "./CMSProvider";
 
-const sections = [
-  { title: "Hero Section", icon: Layout, href: "/admin/cms/homepage/hero" },
-  { title: "Statistics", icon: PieChart, href: "/admin/cms/homepage/statistics" },
-  { title: "Categories", icon: Grid, href: "/admin/cms/homepage/categories" },
-  { title: "Features", icon: Star, href: "/admin/cms/homepage/features" },
-  { title: "Testimonials", icon: Type, href: "/admin/cms/homepage/testimonials" },
-  { title: "Premium Plans", icon: CreditCard, href: "/admin/cms/homepage/premium" },
-  { title: "Recent Items", icon: Clock, href: "/admin/cms/homepage/recent-items" },
-  { title: "Global Network", icon: Globe2, href: "/admin/cms/homepage/global-network" },
-  { title: "FAQ", icon: HelpCircle, href: "/admin/cms/homepage/faq" },
-  { title: "Footer", icon: Layout, href: "/admin/cms/homepage/footer" },
-];
+export const dynamic = "force-dynamic";
 
-export default function HomepageCMSLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+export default async function CMSLayout({ children }: { children: ReactNode }) {
+  const [heroData] = await db.select().from(cmsHero).limit(1);
+  const statisticsList = await db.select().from(cmsStatistics).orderBy(asc(cmsStatistics.orderIndex));
+  const categoriesList = await db.select().from(cmsCategories).orderBy(asc(cmsCategories.orderIndex));
+  const featuresList = await db.select().from(cmsFeatures).orderBy(asc(cmsFeatures.orderIndex));
+  const testimonialsList = await db.select().from(cmsTestimonials).orderBy(desc(cmsTestimonials.createdAt));
+  const pricingPlansList = await db.select().from(cmsPricingPlans).orderBy(asc(cmsPricingPlans.orderIndex));
+  const [globalNetwork] = await db.select().from(cmsGlobalNetwork).limit(1);
+  const [footer] = await db.select().from(cmsFooter).limit(1);
+  
+  const [totalItemsData] = await db.select({ count: count() }).from(items);
+  const [usersData] = await db.select({ count: count() }).from(users);
+
+  const initialData = {
+    hero: heroData || {
+      headline: "Find What Matters.\nReconnect With Confidence.",
+      highlightedWords: "Reconnect",
+      subheading: "LostFound helps people recover lost belongings through AI-powered matching, real-time notifications, and a trusted community network.",
+      primaryButtonText: "Browse Lost Items",
+      primaryButtonLink: "/browse",
+      secondaryButtonText: "Report Lost Item",
+      secondaryButtonLink: "/report",
+      backgroundImage: "",
+      illustrationImage: "/hero-3d-illustration.png",
+      illustrationAnimation: "float",
+      trustBadges: ["Trusted Community", "AI Powered Matching", "Secure Platform", "Global Reach"],
+    },
+    statisticsList,
+    categoriesList,
+    featuresList,
+    testimonialsList,
+    pricingPlansList,
+    recoveredItemsCount: 15420,
+    usersCount: usersData.count,
+    successRate: 85,
+    countriesCount: 142,
+    globalNetwork: globalNetwork || null,
+    footer: footer || null
+  };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-white dark:bg-slate-950">
-      
-      {/* 1. Sections Sidebar */}
-      <div className="w-64 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Page Builder</h2>
-          <p className="text-xs text-slate-500 mt-1">Select a section to edit</p>
-        </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-          {sections.map((section) => {
-            const isActive = pathname === section.href;
-            return (
-              <Link
-                key={section.title}
-                href={section.href}
-                className={clsx(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 shadow-sm border border-emerald-100 dark:border-emerald-500/20"
-                    : "text-slate-600 hover:bg-white dark:text-slate-400 dark:hover:bg-slate-800 hover:shadow-sm"
-                )}
-              >
-                <section.icon className="w-4 h-4" />
-                {section.title}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 2. Editor Pane */}
-      <div className="w-[450px] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col shrink-0 overflow-y-auto">
+    <CMSProvider initialData={initialData}>
+      <CMSLayoutClient>
         {children}
-      </div>
-
-      {/* 3. Live Preview Pane */}
-      <div className="flex-1 bg-slate-100 dark:bg-slate-900 relative overflow-hidden flex flex-col">
-        <div className="h-12 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-between px-4 shrink-0 shadow-sm z-10">
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-400"></div>
-              <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-              <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
-            </div>
-            <div className="ml-4 bg-slate-100 dark:bg-slate-800 px-4 py-1 rounded-full text-xs text-slate-500 font-mono flex items-center gap-2">
-              localhost:3000/
-            </div>
-          </div>
-          <a href="/" target="_blank" className="text-xs font-semibold text-emerald-600 hover:text-emerald-500 flex items-center gap-1 bg-emerald-50 px-3 py-1.5 rounded-full transition-colors">
-            Preview Fullscreen <ArrowUpRight className="w-3 h-3" />
-          </a>
-        </div>
-        
-        {/* Iframe Preview */}
-        <div className="flex-1 w-full h-full p-4 md:p-8 bg-slate-100 dark:bg-slate-900 overflow-hidden">
-          <div className="w-full h-full rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden bg-white flex items-center justify-center">
-            <iframe 
-              src="/" 
-              className="w-full h-full"
-              title="Live Preview"
-            />
-          </div>
-        </div>
-      </div>
-
-    </div>
+      </CMSLayoutClient>
+    </CMSProvider>
   );
 }
