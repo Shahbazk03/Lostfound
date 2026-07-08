@@ -2,7 +2,7 @@ import { db } from "../src/db";
 import { cmsPages, cmsPageBlocks } from "../src/db/schema";
 import { eq } from "drizzle-orm";
 
-async function runSeed() {
+export async function runSeed() {
   console.log("Seeding Production CMS Pages...");
 
   const pagesToSeed = [
@@ -212,6 +212,25 @@ async function runSeed() {
           { name: "Sarah Williams", role: "Customer Experience, Metro Transit", story: "The automated matching has saved our staff hundreds of hours answering phone calls. Passengers can just check the portal.", avatar: "" }
         ]}},
         { type: "cta", content: { headline: "Ready to modernize your operations?", subheading: "Contact our enterprise sales team to schedule a demo and discuss custom integration options.", buttonText: "Request a Demo", buttonLink: "/contact" } }
+      ]
+    },
+    {
+      title: "Pricing",
+      slug: "pricing",
+      seoTitle: "Pricing & Premium Features | LostFound",
+      seoDescription: "Upgrade to LostFound Premium to access real-time SMS alerts, advanced AI matching, and priority support.",
+      blocks: [
+        { type: "hero", content: { headline: "LostFound Premium", subheading: "Maximize your chances of recovering lost items with our advanced features.", primaryButtonText: "View Plans", primaryButtonLink: "#plans" } },
+        { type: "feature-grid", content: { title: "Premium Benefits", features: [
+          { title: "Real-time SMS Alerts", description: "Get notified instantly when an item matching your description is found." },
+          { title: "Priority Listing", description: "Your lost item report will be highlighted and appear at the top of search results." },
+          { title: "Dedicated Support", description: "24/7 priority access to our support team." }
+        ]}},
+        { type: "faq", content: { title: "Pricing FAQs", items: [
+          { question: "Can I cancel at any time?", answer: "Yes, you can cancel your subscription at any time from your account settings." },
+          { question: "Do I get a refund if my item is found quickly?", answer: "We do not offer prorated refunds, but you will retain premium features for the remainder of your billing cycle." }
+        ]}},
+        { type: "cta", content: { headline: "Ready to upgrade?", subheading: "Join thousands of users who have successfully recovered their items with Premium.", buttonText: "Upgrade Now", buttonLink: "/dashboard" } }
       ]
     }
   ];

@@ -17,18 +17,18 @@ export const defaultFooterGroups: FooterGroup[] = [
   {
     title: "Resources",
     links: [
-      { label: "Help Center", url: "/help" },
-      { label: "Safety Tips", url: "/safety" },
-      { label: "Community FAQ", url: "/faq" },
-      { label: "Success Stories", url: "/blog" },
+      { label: "Help Center", url: "/help-center" },
+      { label: "Safety Tips", url: "/safety-tips" },
+      { label: "Community FAQ", url: "/community-faq" },
+      { label: "Success Stories", url: "/success-stories" },
     ],
   },
   {
     title: "Company",
     links: [
-      { label: "About Us", url: "/about" },
+      { label: "About Us", url: "/about-us" },
       { label: "Careers", url: "/careers" },
-      { label: "Press Kit", url: "/press" },
+      { label: "Press Kit", url: "/press-kit" },
       { label: "Contact", url: "/contact" },
       { label: "Partners", url: "/partners" },
     ],
