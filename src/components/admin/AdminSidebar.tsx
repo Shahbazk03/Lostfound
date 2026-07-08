@@ -48,7 +48,6 @@ const sidebarLinks = [
       { title: "Premium Plans", href: "/admin/cms/homepage/premium" },
       { title: "Recent Items", href: "/admin/cms/homepage/recent-items" },
       { title: "Global Network", href: "/admin/cms/homepage/global-network" },
-      { title: "FAQ", href: "/admin/cms/homepage/faq" },
       { title: "Footer", href: "/admin/cms/homepage/footer" },
     ]
   },
