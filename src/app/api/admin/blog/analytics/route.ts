@@ -4,6 +4,8 @@ import { blogPosts, blogCategories, blogTags, blogComments } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { sql, eq } from "drizzle-orm";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     await requireAdmin();
@@ -20,14 +22,14 @@ export async function GET() {
     const [totalViewsResult] = await db.select({ sum: sql<number>`sum(${blogPosts.views})` }).from(blogPosts);
 
     return NextResponse.json({
-      totalPosts: totalPostsResult?.count || 0,
-      publishedPosts: publishedPostsResult?.count || 0,
-      draftPosts: draftPostsResult?.count || 0,
-      scheduledPosts: scheduledPostsResult?.count || 0,
-      totalCategories: totalCategoriesResult?.count || 0,
-      totalTags: totalTagsResult?.count || 0,
-      totalComments: totalCommentsResult?.count || 0,
-      totalViews: totalViewsResult?.sum || 0,
+      totalPosts: Number(totalPostsResult?.count || 0),
+      publishedPosts: Number(publishedPostsResult?.count || 0),
+      draftPosts: Number(draftPostsResult?.count || 0),
+      scheduledPosts: Number(scheduledPostsResult?.count || 0),
+      totalCategories: Number(totalCategoriesResult?.count || 0),
+      totalTags: Number(totalTagsResult?.count || 0),
+      totalComments: Number(totalCommentsResult?.count || 0),
+      totalViews: Number(totalViewsResult?.sum || 0),
     });
   } catch (error) {
     console.error("GET Analytics Error:", error);

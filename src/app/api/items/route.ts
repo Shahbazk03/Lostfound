@@ -19,9 +19,9 @@ export async function GET(request: NextRequest) {
     const conditions = [eq(items.status, status as "active" | "resolved" | "archived")];
 
     if (type) conditions.push(eq(items.type, type as "lost" | "found"));
-    if (category) conditions.push(eq(items.category, category));
+    if (category) conditions.push(ilike(items.category, category));
     if (city) conditions.push(ilike(items.city, `%${city}%`));
-    if (country) conditions.push(eq(items.country, country));
+    if (country) conditions.push(ilike(items.country, country));
     if (dateFrom) {
       conditions.push(sql`${items.dateLostFound} >= ${new Date(dateFrom)}`);
     }

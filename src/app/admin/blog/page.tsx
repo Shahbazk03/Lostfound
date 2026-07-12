@@ -39,8 +39,8 @@ export default function BlogDashboard() {
   const fetchData = async () => {
     try {
       const [statsRes, postsRes] = await Promise.all([
-        fetch("/api/admin/blog/analytics"),
-        fetch("/api/admin/blog/posts")
+        fetch("/api/admin/blog/analytics", { cache: "no-store" }),
+        fetch("/api/admin/blog/posts", { cache: "no-store" })
       ]);
       if (statsRes.ok) setStats(await statsRes.json());
       if (postsRes.ok) {
@@ -55,12 +55,12 @@ export default function BlogDashboard() {
   };
 
   const statCards = [
-    { title: "Total Posts", value: stats?.totalPosts || 0, icon: FileText, color: "text-blue-500", bg: "bg-blue-500/10" },
-    { title: "Published", value: stats?.publishedPosts || 0, icon: CheckCircle, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-    { title: "Drafts", value: stats?.draftPosts || 0, icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10" },
-    { title: "Total Views", value: stats?.totalViews || 0, icon: Eye, color: "text-purple-500", bg: "bg-purple-500/10" },
-    { title: "Categories", value: stats?.totalCategories || 0, icon: FolderOpen, color: "text-pink-500", bg: "bg-pink-500/10" },
-    { title: "Comments", value: stats?.totalComments || 0, icon: MessageSquare, color: "text-indigo-500", bg: "bg-indigo-500/10" },
+    { title: "Total Posts", value: (stats?.totalPosts || 0).toLocaleString(), icon: FileText, color: "text-blue-500", bg: "bg-blue-500/10" },
+    { title: "Published", value: (stats?.publishedPosts || 0).toLocaleString(), icon: CheckCircle, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    { title: "Drafts", value: (stats?.draftPosts || 0).toLocaleString(), icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10" },
+    { title: "Total Views", value: (stats?.totalViews || 0).toLocaleString(), icon: Eye, color: "text-purple-500", bg: "bg-purple-500/10" },
+    { title: "Categories", value: (stats?.totalCategories || 0).toLocaleString(), icon: FolderOpen, color: "text-pink-500", bg: "bg-pink-500/10" },
+    { title: "Comments", value: (stats?.totalComments || 0).toLocaleString(), icon: MessageSquare, color: "text-indigo-500", bg: "bg-indigo-500/10" },
   ];
 
   if (loading) {
