@@ -1,35 +1,55 @@
-"use client";
-
-import { motion } from "framer-motion";
-import { Database, Package, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Clock, ExternalLink, Package, RefreshCw } from "lucide-react";
 
 export default function RecentItemsPage() {
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto w-full flex items-center justify-center">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 max-w-2xl text-center shadow-sm relative overflow-hidden"
-      >
-        <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl" />
-        <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl" />
-        
-        <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100 dark:border-slate-700 relative">
-          <Database className="w-10 h-10 text-emerald-600 dark:text-emerald-400 absolute opacity-50" />
-          <Package className="w-6 h-6 text-slate-800 dark:text-slate-200 z-10" />
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50 dark:bg-slate-950">
+      <div className="flex items-start gap-3 border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+          <Clock className="h-5 w-5" />
         </div>
-        
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Dynamic Content Module</h1>
-        
-        <p className="text-slate-600 dark:text-slate-400 mb-8 text-lg">
-          The <strong>Recent Items</strong> section is automatically populated with the latest active Lost & Found listings from your database. No manual configuration is required.
-        </p>
-
-        <div className="flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 py-3 px-6 rounded-full inline-flex font-medium">
-          <Sparkles className="w-5 h-5" />
-          <span>Real-time Sync Active</span>
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Recent items</h1>
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Filled automatically, nothing to publish here.</p>
         </div>
-      </motion.div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-5">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 ring-1 ring-inset ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+            <Package className="h-6 w-6" />
+          </div>
+          <h2 className="mt-4 text-base font-semibold text-slate-900 dark:text-white">This section updates itself</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+            The homepage shows the newest <strong className="font-semibold text-slate-900 dark:text-white">active</strong> lost
+            and found listings straight from the database. To change what appears, manage the listings themselves:
+            resolved and archived items drop out automatically.
+          </p>
+          <ul className="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-400">
+            <li className="flex items-start gap-2">
+              <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              The public homepage refreshes its cache within about a minute of a change.
+            </li>
+          </ul>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link
+              href="/admin/items"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+            >
+              <Package className="h-4 w-4" />
+              Manage listings
+            </Link>
+            <a
+              href="/browse"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View on site
+            </a>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

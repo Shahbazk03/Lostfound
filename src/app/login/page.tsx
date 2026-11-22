@@ -1,12 +1,30 @@
 "use client";
 
-import { LoadingLogo } from "@/components/LoadingLogo";
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { Search, Eye, EyeOff } from "lucide-react";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
+import { safeNextPath } from "@/lib/utils";
+import { Alert } from "@/components/ui/Alert";
+import { AuthFormSkeleton, AuthShell, OrDivider } from "@/components/ui/AuthShell";
+import { Field } from "@/components/ui/Field";
+import { PasswordInput } from "@/components/ui/PasswordInput";
+import { Spinner } from "@/components/ui/Spinner";
+import { ui } from "@/components/ui/styles";
+
+// Error codes the Google OAuth callback can send back in ?error=. Raw values
+// are never shown, so a crafted link can't put arbitrary text on this page.
+const LOGIN_ERRORS: Record<string, string> = {
+  GoogleAuthCancelled: "Google sign-in was cancelled.",
+  GoogleAuthFailed: "We couldn't sign you in with Google. Please try again.",
+  GoogleAuthNotConfigured:
+    "Google sign-in isn't available right now. Please use your email and password.",
+  GoogleEmailNotVerified:
+    "Your Google account's email address isn't verified. Verify it with Google, or sign in with your email and password.",
+  NoCodeProvided: "Google sign-in didn't complete. Please try again.",
+  ServerConfigurationError: "Sign-in is temporarily unavailable. Please try again later.",
+};
 
 function LoginContent() {
   const { login } = useAuth();
@@ -14,29 +32,30 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const urlError = searchParams.get("error");
-    if (urlError) {
-      if (urlError === "GoogleAuthNotConfigured") {
-        setError("Google Login is not configured on this server.");
-      } else {
-        setError(urlError);
-      }
-    }
-  }, [searchParams]);
+  const nextPath = safeNextPath(searchParams.get("next"));
+  const registerHref = searchParams.get("next") ? `/register?next=${encodeURIComponent(nextPath)}` : "/register";
+
+  const urlErrorCode = searchParams.get("error");
+  const [urlErrorDismissed, setUrlErrorDismissed] = useState(false);
+  const urlError =
+    urlErrorCode && !urlErrorDismissed
+      ? LOGIN_ERRORS[urlErrorCode] ?? "Something went wrong signing you in. Please try again."
+      : "";
+  const shownError = error || urlError;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setUrlErrorDismissed(true);
     setLoading(true);
 
     try {
       await login(email, password);
-      router.push("/dashboard");
+      // Only same-site relative paths are honoured (no "//evil.com").
+      router.push(nextPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -45,128 +64,96 @@ function LoginContent() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 py-12 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
-              <span className="text-slate-900 dark:text-white font-bold text-lg tracking-wider">LF</span>
-            </div>
-            <span className="text-2xl font-bold text-slate-900 tracking-tight">LOSTFOUND</span>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to manage your listings, matches and messages."
+      footer={
+        <>
+          New to LostFound?{" "}
+          <Link href={registerHref} className="font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300">
+            Create an account
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">
-            Welcome back
-          </h1>
-          <p className="text-slate-600 mt-1">
-            Sign in to your account to continue
-          </p>
-        </div>
+        </>
+      }
+    >
+      {shownError && (
+        <Alert
+          tone="error"
+          className="mb-6"
+          onDismiss={() => {
+            setError("");
+            setUrlErrorDismissed(true);
+          }}
+        >
+          {shownError}
+        </Alert>
+      )}
 
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
-          )}
+      <GoogleLoginButton action="login" next={nextPath} />
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                placeholder="you@example.com"
-                required
-              />
-            </div>
+      <OrDivider label="or sign in with email" />
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-medium text-slate-700">
-                  Password
-                </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-emerald-600 font-medium hover:text-emerald-700"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all pr-10"
-                  placeholder="Enter your password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Field id="login-email" label="Email">
+          <input
+            id="login-email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={ui.input}
+            placeholder="you@example.com"
+            required
+          />
+        </Field>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-emerald-600 text-slate-900 dark:text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        <Field
+          id="login-password"
+          label="Password"
+          labelAside={
+            <Link
+              href="/forgot-password"
+              className="mb-1.5 rounded text-sm font-medium text-emerald-700 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300"
             >
-              {loading ? (
-                <>
-                  <LoadingLogo className="w-4 h-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </button>
-          </form>
+              Forgot password?
+            </Link>
+          }
+        >
+          <PasswordInput
+            id="login-password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your password"
+            required
+          />
+        </Field>
 
-          <div className="relative flex items-center my-6">
-            <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">or continue with</span>
-            <div className="flex-grow border-t border-slate-200"></div>
-          </div>
-
-          <GoogleLoginButton action="login" />
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-600">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/register"
-                className="text-emerald-600 font-medium hover:text-emerald-700"
-              >
-                Create one
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+        <button type="submit" disabled={loading} className={`${ui.btnPrimary} w-full`}>
+          {loading ? (
+            <>
+              <Spinner />
+              Signing in…
+            </>
+          ) : (
+            "Sign in"
+          )}
+        </button>
+      </form>
+    </AuthShell>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 py-12 px-4">
-        <LoadingLogo className="w-8 h-8 animate-spin" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <AuthShell title="Welcome back" subtitle="Sign in to manage your listings, matches and messages.">
+          <AuthFormSkeleton />
+        </AuthShell>
+      }
+    >
       <LoginContent />
     </Suspense>
   );

@@ -1,16 +1,60 @@
 "use client";
 
-import { LoadingLogo } from "@/components/LoadingLogo";
-import { useState, useEffect } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, Check, MailCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { Search, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
+import { cn, safeNextPath } from "@/lib/utils";
+import { Alert } from "@/components/ui/Alert";
+import { AuthFormSkeleton, AuthShell, OrDivider } from "@/components/ui/AuthShell";
+import { Field } from "@/components/ui/Field";
+import { PasswordInput } from "@/components/ui/PasswordInput";
+import { PasswordStrength } from "@/components/ui/PasswordStrength";
+import { Spinner } from "@/components/ui/Spinner";
+import { ui } from "@/components/ui/styles";
 
-export default function RegisterPage() {
+const linkCls =
+  "font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300";
+
+function Checkbox({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-600 dark:text-slate-400">
+      <span className="relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 bg-white transition checked:border-emerald-600 checked:bg-emerald-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-900 dark:checked:border-emerald-500 dark:checked:bg-emerald-500"
+          required
+        />
+        <Check
+          className="pointer-events-none absolute h-3.5 w-3.5 text-white opacity-0 transition peer-checked:opacity-100"
+          aria-hidden="true"
+          strokeWidth={3}
+        />
+      </span>
+      <span className="leading-6">{children}</span>
+    </label>
+  );
+}
+
+function RegisterContent() {
   const { register, verifyOTP } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get("next"));
+  const loginHref = searchParams.get("next") ? `/login?next=${encodeURIComponent(nextPath)}` : "/login";
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -26,26 +70,10 @@ export default function RegisterPage() {
   const [requireVerification, setRequireVerification] = useState(false);
   const [otp, setOtp] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
 
-  // Password strength meter
-  const [strength, setStrength] = useState(0);
-  const [strengthLabel, setStrengthLabel] = useState("");
-
-  useEffect(() => {
-    let score = 0;
-    if (password.length >= 8) score += 1;
-    if (/[A-Z]/.test(password)) score += 1;
-    if (/[a-z]/.test(password)) score += 1;
-    if (/[0-9]/.test(password)) score += 1;
-    if (/[^A-Za-z0-9]/.test(password)) score += 1;
-    
-    setStrength(score);
-
-    if (password.length === 0) setStrengthLabel("");
-    else if (score <= 2) setStrengthLabel("Weak");
-    else if (score <= 4) setStrengthLabel("Medium");
-    else setStrengthLabel("Strong");
-  }, [password]);
+  const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +101,7 @@ export default function RegisterPage() {
       if (res.requireVerification) {
         setRequireVerification(true);
       } else {
-        router.push("/dashboard");
+        router.push(nextPath);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -89,7 +117,7 @@ export default function RegisterPage() {
 
     try {
       await verifyOTP(email, otp);
-      router.push("/dashboard");
+      router.push(nextPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
@@ -97,255 +125,257 @@ export default function RegisterPage() {
     }
   };
 
+  const handleResend = async () => {
+    setError("");
+    setResendMessage("");
+    setResendLoading(true);
+    try {
+      const res = await fetch("/api/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setResendMessage(data.message || "If your account still needs verification, a new code has been sent.");
+      } else {
+        // Includes 429 when too many codes were requested.
+        setError(data.error || "Could not send a new code. Please try again later.");
+      }
+    } catch {
+      setError("Network error. Check your connection and try again.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   if (requireVerification) {
     return (
-      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 py-12 px-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-slate-900">Verify your email</h1>
-            <p className="text-slate-600 mt-1">
-              We sent a 6-digit code to <strong>{email}</strong>
-            </p>
-          </div>
+      <AuthShell
+        title="Check your email"
+        subtitle={
+          <>
+            We sent a 6-digit code to <strong className="font-semibold text-slate-900 dark:text-white">{email}</strong>.
+            Enter it below to verify your account.
+          </>
+        }
+        footer={
+          <button
+            type="button"
+            onClick={() => {
+              setRequireVerification(false);
+              setOtp("");
+              setError("");
+              setResendMessage("");
+            }}
+            className="inline-flex items-center gap-1.5 rounded font-medium text-slate-600 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Use a different email
+          </button>
+        }
+      >
+        <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/20">
+          <MailCheck className="h-6 w-6" aria-hidden="true" />
+        </span>
+        {error && (
+          <Alert tone="error" className="mb-5" onDismiss={() => setError("")}>
+            {error}
+          </Alert>
+        )}
+        {resendMessage && (
+          <Alert tone="success" className="mb-5">
+            {resendMessage}
+          </Alert>
+        )}
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                {error}
-              </div>
+        <form onSubmit={handleVerify} className="space-y-5">
+          <Field id="register-otp" label="Verification code">
+            <input
+              type="text"
+              id="register-otp"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              className={cn(ui.input, "h-14 text-center font-mono text-2xl tracking-[0.5em]")}
+              placeholder="••••••"
+              maxLength={6}
+              autoFocus
+              required
+            />
+          </Field>
+
+          <button type="submit" disabled={verifyLoading || otp.length !== 6} className={cn(ui.btnPrimary, "w-full")}>
+            {verifyLoading ? (
+              <>
+                <Spinner />
+                Verifying…
+              </>
+            ) : (
+              "Verify and continue"
             )}
+          </button>
+        </form>
 
-            <form onSubmit={handleVerify} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Verification Code
-                </label>
-                <input
-                  type="text"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-center tracking-[0.5em] font-mono text-lg"
-                  placeholder="------"
-                  maxLength={6}
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={verifyLoading || otp.length !== 6}
-                className="w-full bg-emerald-600 text-slate-900 dark:text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {verifyLoading ? (
-                  <>
-                    <LoadingLogo className="w-4 h-4 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  "Verify & Continue"
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
+        <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
+          Didn&apos;t get a code? Check your spam folder, or{" "}
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resendLoading}
+            className={cn(linkCls, "rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50")}
+          >
+            {resendLoading ? "sending…" : "send a new one"}
+          </button>
+          .
+        </p>
+      </AuthShell>
     );
   }
 
-  const strengthColors = {
-    Weak: "bg-red-500",
-    Medium: "bg-yellow-500",
-    Strong: "bg-emerald-500",
-  };
-
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 py-12 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
-              <span className="text-slate-900 dark:text-white font-bold text-lg tracking-wider">LF</span>
-            </div>
-            <span className="text-2xl font-bold text-slate-900 tracking-tight">LOSTFOUND</span>
+    <AuthShell
+      title="Create your account"
+      subtitle="Free to join. Report items, get matched and chat privately."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link href={loginHref} className={linkCls}>
+            Sign in
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">
-            Create your account
-          </h1>
-          <p className="text-slate-600 mt-1">
-            Join our global community today
-          </p>
+        </>
+      }
+    >
+      {error && (
+        <Alert tone="error" className="mb-6" onDismiss={() => setError("")}>
+          {error}
+        </Alert>
+      )}
+
+      <GoogleLoginButton action="register" next={nextPath} />
+
+      <OrDivider label="or sign up with email" />
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Field id="register-name" label="Full name">
+          <input
+            type="text"
+            id="register-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+            className={ui.input}
+            placeholder="Your name"
+            required
+          />
+        </Field>
+
+        <Field id="register-email" label="Email">
+          <input
+            type="email"
+            id="register-email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            inputMode="email"
+            className={ui.input}
+            placeholder="you@example.com"
+            required
+          />
+        </Field>
+
+        <Field id="register-phone" label="Phone number" optional hint="Never shown publicly.">
+          <input
+            type="tel"
+            id="register-phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+            aria-describedby="register-phone-hint"
+            className={ui.input}
+            placeholder="+1 (555) 000-0000"
+          />
+        </Field>
+
+        <div>
+          <Field id="register-password" label="Password">
+            <PasswordInput
+              id="register-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              visible={showPassword}
+              onToggleVisible={() => setShowPassword((v) => !v)}
+              placeholder="At least 8 characters"
+              autoComplete="new-password"
+              aria-describedby="register-password-strength"
+              minLength={8}
+              required
+            />
+          </Field>
+          <PasswordStrength password={password} id="register-password-strength" />
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
+        <Field id="register-confirm-password" label="Confirm password" error={mismatch ? "Passwords don't match yet." : undefined}>
+          <PasswordInput
+            id="register-confirm-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            visible={showPassword}
+            onToggleVisible={() => setShowPassword((v) => !v)}
+            placeholder="Type it again"
+            autoComplete="new-password"
+            invalid={mismatch}
+            aria-describedby={mismatch ? "register-confirm-password-error" : undefined}
+            minLength={8}
+            required
+          />
+        </Field>
+
+        <div className="space-y-3 pt-1">
+          <Checkbox checked={agreeTerms} onChange={setAgreeTerms}>
+            I agree to the{" "}
+            <Link href="/terms" className={linkCls}>
+              Terms &amp; Conditions
+            </Link>
+          </Checkbox>
+          <Checkbox checked={agreePrivacy} onChange={setAgreePrivacy}>
+            I agree to the{" "}
+            <Link href="/privacy" className={linkCls}>
+              Privacy Policy
+            </Link>
+          </Checkbox>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading || !agreeTerms || !agreePrivacy}
+          className={cn(ui.btnPrimary, "w-full")}
+        >
+          {loading ? (
+            <>
+              <Spinner />
+              Creating account…
+            </>
+          ) : (
+            "Create account"
           )}
+        </button>
+      </form>
+    </AuthShell>
+  );
+}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Full Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                placeholder="John Doe"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                placeholder="you@example.com"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Phone Number <span className="text-slate-600 dark:text-slate-400">(optional)</span>
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                placeholder="+1 (555) 000-0000"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all pr-10"
-                  placeholder="Min. 8 characters"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-              {password.length > 0 && (
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex-1 flex h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full transition-all duration-300 ${strengthColors[strengthLabel as keyof typeof strengthColors]}`}
-                      style={{ width: `${Math.min((strength / 5) * 100, 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-xs font-medium text-slate-600 min-w-[50px]">{strengthLabel}</span>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Confirm Password
-              </label>
-              <input
-                type={showPassword ? "text" : "password"}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                placeholder="Confirm your password"
-                required
-              />
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <label className="flex items-start gap-3">
-                <div className="flex items-center h-5">
-                  <input
-                    type="checkbox"
-                    checked={agreeTerms}
-                    onChange={(e) => setAgreeTerms(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                    required
-                  />
-                </div>
-                <div className="text-sm text-slate-600">
-                  I agree to the <Link href="/terms" className="text-emerald-600 hover:underline">Terms & Conditions</Link>
-                </div>
-              </label>
-              
-              <label className="flex items-start gap-3">
-                <div className="flex items-center h-5">
-                  <input
-                    type="checkbox"
-                    checked={agreePrivacy}
-                    onChange={(e) => setAgreePrivacy(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                    required
-                  />
-                </div>
-                <div className="text-sm text-slate-600">
-                  I agree to the <Link href="/privacy" className="text-emerald-600 hover:underline">Privacy Policy</Link>
-                </div>
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || !agreeTerms || !agreePrivacy}
-              className="w-full bg-emerald-600 text-slate-900 dark:text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4"
-            >
-              {loading ? (
-                <>
-                  <LoadingLogo className="w-4 h-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                "Create Account"
-              )}
-            </button>
-          </form>
-
-          <div className="relative flex items-center my-6">
-            <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">or sign up with</span>
-            <div className="flex-grow border-t border-slate-200"></div>
-          </div>
-
-          <GoogleLoginButton action="register" />
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-600">
-              Already have an account?{" "}
-              <Link
-                href="/login"
-                className="text-emerald-600 font-medium hover:text-emerald-700"
-              >
-                Sign in
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell title="Create your account" subtitle="Free to join. Report items, get matched and chat privately.">
+          <AuthFormSkeleton />
+        </AuthShell>
+      }
+    >
+      <RegisterContent />
+    </Suspense>
   );
 }

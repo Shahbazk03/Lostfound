@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { messages, users, items } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { authErrorResponse } from "@/lib/api-errors";
 import { desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -15,8 +16,11 @@ export async function GET() {
       .select({
         id: messages.id,
         content: messages.content,
+        senderId: messages.senderId,
         senderName: sender.name,
+        receiverId: messages.receiverId,
         receiverName: receiver.name,
+        itemId: messages.itemId,
         itemTitle: items.title,
         createdAt: messages.createdAt,
       })
@@ -29,16 +33,9 @@ export async function GET() {
 
     return NextResponse.json({ messages: results });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Get messages error:", error);
-    if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (error instanceof Error && error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

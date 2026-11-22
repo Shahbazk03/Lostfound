@@ -1,20 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Loader2, Save, Type, Link as LinkIcon, Image as ImageIcon, Sparkles, CheckCircle, LayoutTemplate } from "lucide-react";
-import { useCMS } from "../CMSProvider";
+import { useState } from "react";
+import { LayoutTemplate, X } from "lucide-react";
+import { useCMS } from "@/app/admin/cms/homepage/CMSProvider";
 import { ImageUpload } from "@/components/admin/ImageUpload";
+import { CharCount, Field, Input, Select, Textarea } from "@/components/admin/ui/Form";
+import { iconButton } from "@/components/admin/ui/styles";
+import { cn } from "@/lib/utils";
+import { EditorCard, InlineAdd, SectionEditor, useSectionPublisher } from "../_components/SectionEditor";
+import { buttonLinkError, collect, maxLen, required } from "../_components/validation";
 
 export default function HeroPage() {
   const { data, updateHero } = useCMS();
-  const [isSaving, setIsSaving] = useState(false);
-  const [localData, setLocalData] = useState(data.hero || {});
-  const [successMsg, setSuccessMsg] = useState("");
-
-  useEffect(() => {
-    setLocalData(data.hero || {});
-  }, [data.hero]);
+  const [localData, setLocalData] = useState<any>(data.hero || {});
+  const { saving, publish } = useSectionPublisher("hero", "/api/admin/cms/hero", "hero section");
 
   const handleChange = (key: string, value: any) => {
     const updated = { ...localData, [key]: value };
@@ -22,233 +21,124 @@ export default function HeroPage() {
     updateHero(updated); // Update live preview immediately
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSuccessMsg("");
-    try {
-      const res = await fetch("/api/admin/cms/hero", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(localData),
-      });
+  const badges: string[] = Array.isArray(localData.trustBadges) ? localData.trustBadges : [];
+  const setBadge = (index: number, value: string) => handleChange("trustBadges", badges.map((b, i) => (i === index ? value : b)));
+  const addBadge = () => handleChange("trustBadges", [...badges, "New badge"]);
+  const removeBadge = (index: number) => handleChange("trustBadges", badges.filter((_, i) => i !== index));
 
-      if (res.ok) {
-        setSuccessMsg("Hero section saved successfully!");
-        setTimeout(() => setSuccessMsg(""), 3000);
-      } else {
-        alert("Failed to save hero section.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Error saving hero section.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleTrustBadgeChange = (index: number, value: string) => {
-    const newBadges = [...(localData.trustBadges || [])];
-    newBadges[index] = value;
-    handleChange("trustBadges", newBadges);
-  };
-
-  const addTrustBadge = () => {
-    handleChange("trustBadges", [...(localData.trustBadges || []), "New Badge"]);
-  };
-
-  const removeTrustBadge = (index: number) => {
-    const newBadges = [...(localData.trustBadges || [])];
-    newBadges.splice(index, 1);
-    handleChange("trustBadges", newBadges);
-  };
+  const errors = collect([
+    ["headline", required(localData.headline, "Headline") ?? maxLen(localData.headline, 500)],
+    ["subheading", required(localData.subheading, "Subheading") ?? maxLen(localData.subheading, 2000)],
+    ["primaryButtonText", maxLen(localData.primaryButtonText, 50)],
+    ["primaryButtonLink", buttonLinkError(localData.primaryButtonText, localData.primaryButtonLink)],
+    ["secondaryButtonText", maxLen(localData.secondaryButtonText, 50)],
+    ["secondaryButtonLink", buttonLinkError(localData.secondaryButtonText, localData.secondaryButtonLink)],
+  ]);
 
   return (
-    <div className="w-full flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
-      <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex justify-between items-center sticky top-0 z-10">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <LayoutTemplate className="w-5 h-5 text-emerald-500" />
-            Hero Section Editor
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Changes reflect instantly in the live preview</p>
+    <SectionEditor
+      sectionKey="hero"
+      icon={LayoutTemplate}
+      title="Hero"
+      description="The first thing visitors see. Changes show in the preview as you type."
+      errorCount={Object.keys(errors).length}
+      saving={saving}
+      onPublish={() => publish(localData, localData)}
+    >
+      <EditorCard title="Text">
+        <Field label="Headline" required error={errors.headline} hint="Press Enter for a line break." aside={<CharCount value={localData.headline} max={500} />}>
+          <Textarea
+            rows={3}
+            value={localData.headline || ""}
+            onChange={(e) => handleChange("headline", e.target.value)}
+            placeholder={"Find What Matters.\nReconnect With Confidence."}
+          />
+        </Field>
+        <Field label="Highlighted words" hint="Comma separated. These words get the accent colour.">
+          <Input
+            value={localData.highlightedWords || ""}
+            onChange={(e) => handleChange("highlightedWords", e.target.value)}
+            placeholder="Reconnect, Confidence"
+          />
+        </Field>
+        <Field label="Subheading" required error={errors.subheading}>
+          <Textarea
+            rows={3}
+            value={localData.subheading || ""}
+            onChange={(e) => handleChange("subheading", e.target.value)}
+            placeholder="LostFound helps people recover lost belongings…"
+          />
+        </Field>
+      </EditorCard>
+
+      <EditorCard title="Buttons" description="Leave a button's text empty to hide it.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Primary text" error={errors.primaryButtonText}>
+            <Input value={localData.primaryButtonText || ""} onChange={(e) => handleChange("primaryButtonText", e.target.value)} placeholder="Browse lost items" />
+          </Field>
+          <Field label="Primary link" error={errors.primaryButtonLink}>
+            <Input value={localData.primaryButtonLink || ""} onChange={(e) => handleChange("primaryButtonLink", e.target.value)} placeholder="/browse" />
+          </Field>
+          <Field label="Secondary text" error={errors.secondaryButtonText}>
+            <Input value={localData.secondaryButtonText || ""} onChange={(e) => handleChange("secondaryButtonText", e.target.value)} placeholder="Report lost item" />
+          </Field>
+          <Field label="Secondary link" error={errors.secondaryButtonLink}>
+            <Input value={localData.secondaryButtonLink || ""} onChange={(e) => handleChange("secondaryButtonLink", e.target.value)} placeholder="/report" />
+          </Field>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-        >
-          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isSaving ? "Saving..." : "Publish Changes"}
-        </button>
-      </div>
+      </EditorCard>
 
-      <div className="p-6 overflow-y-auto flex-1 space-y-8">
-        {successMsg && (
-          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2 font-medium">
-            <CheckCircle className="w-5 h-5" />
-            {successMsg}
-          </div>
-        )}
+      <EditorCard title="Images">
+        <ImageUpload
+          label="Illustration"
+          value={localData.illustrationImage || ""}
+          onChange={(url) => handleChange("illustrationImage", url)}
+        />
+        <Field label="Illustration animation">
+          <Select value={localData.illustrationAnimation || "float"} onChange={(e) => handleChange("illustrationAnimation", e.target.value)}>
+            <option value="none">None</option>
+            <option value="float">Float</option>
+            <option value="pulse">Pulse</option>
+            <option value="bounce">Bounce</option>
+          </Select>
+        </Field>
+        <ImageUpload
+          label="Background pattern (optional)"
+          value={localData.backgroundImage || ""}
+          onChange={(url) => handleChange("backgroundImage", url)}
+        />
+      </EditorCard>
 
-        {/* Text Content */}
-        <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-            <Type className="w-5 h-5 text-emerald-500" />
-            Text Content
-          </h2>
-          <div className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Headline</label>
-              <textarea
-                value={localData.headline || ""}
-                onChange={(e) => handleChange("headline", e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent min-h-[100px]"
-                placeholder="Find What Matters.\nReconnect With Confidence."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Highlighted Words (comma separated)</label>
-              <input
-                type="text"
-                value={localData.highlightedWords || ""}
-                onChange={(e) => handleChange("highlightedWords", e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="Reconnect, Confidence"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Subheading</label>
-              <textarea
-                value={localData.subheading || ""}
-                onChange={(e) => handleChange("subheading", e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent min-h-[100px]"
-                placeholder="LostFound helps people recover lost belongings..."
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Media */}
-        <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-            <ImageIcon className="w-5 h-5 text-emerald-500" />
-            Media Assets
-          </h2>
-          <div className="space-y-6">
-            <div>
-              <ImageUpload
-                label="3D Illustration Image"
-                value={localData.illustrationImage || ""}
-                onChange={(url) => handleChange("illustrationImage", url)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Illustration Animation</label>
-              <select
-                value={localData.illustrationAnimation || "float"}
-                onChange={(e) => handleChange("illustrationAnimation", e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              >
-                <option value="none">None</option>
-                <option value="float">Float</option>
-                <option value="pulse">Pulse</option>
-                <option value="bounce">Bounce</option>
-              </select>
-            </div>
-            <div>
-              <ImageUpload
-                label="Background Pattern (Optional)"
-                value={localData.backgroundImage || ""}
-                onChange={(url) => handleChange("backgroundImage", url)}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Buttons */}
-        <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-            <LinkIcon className="w-5 h-5 text-emerald-500" />
-            Call to Action Buttons
-          </h2>
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Primary Button Text</label>
-                <input
-                  type="text"
-                  value={localData.primaryButtonText || ""}
-                  onChange={(e) => handleChange("primaryButtonText", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Primary Button Link</label>
-                <input
-                  type="text"
-                  value={localData.primaryButtonLink || ""}
-                  onChange={(e) => handleChange("primaryButtonLink", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Secondary Button Text</label>
-                <input
-                  type="text"
-                  value={localData.secondaryButtonText || ""}
-                  onChange={(e) => handleChange("secondaryButtonText", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Secondary Button Link</label>
-                <input
-                  type="text"
-                  value={localData.secondaryButtonLink || ""}
-                  onChange={(e) => handleChange("secondaryButtonLink", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Trust Badges */}
-        <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-emerald-500" />
-              Trust Badges
-            </h2>
-            <button
-              onClick={addTrustBadge}
-              className="text-sm bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg font-medium transition-colors"
-            >
-              + Add Badge
-            </button>
-          </div>
-          <div className="space-y-3">
-            {(localData.trustBadges || []).map((badge: string, i: number) => (
-              <div key={i} className="flex gap-3">
-                <input
-                  type="text"
+      <EditorCard
+        title="Trust badges"
+        description="Short reassurance points under the buttons."
+        action={<InlineAdd onClick={addBadge}>Add badge</InlineAdd>}
+      >
+        {badges.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">No badges yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {badges.map((badge, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <Input
                   value={badge}
-                  onChange={(e) => handleTrustBadgeChange(i, e.target.value)}
-                  className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  onChange={(e) => setBadge(i, e.target.value)}
+                  aria-label={`Badge ${i + 1}`}
+                  aria-invalid={badge.trim() === "" || undefined}
                 />
                 <button
-                  onClick={() => removeTrustBadge(i)}
-                  className="bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 px-4 rounded-xl transition-colors font-medium"
+                  type="button"
+                  onClick={() => removeBadge(i)}
+                  className={cn(iconButton, "hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400")}
+                  aria-label={`Remove badge ${i + 1}`}
                 >
-                  Remove
+                  <X className="h-4 w-4" />
                 </button>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
-      </div>
-    </div>
+          </ul>
+        )}
+      </EditorCard>
+    </SectionEditor>
   );
 }

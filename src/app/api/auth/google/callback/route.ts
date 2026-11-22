@@ -1,43 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, verificationTokens } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { createToken, setAuthCookie, hashPassword } from "@/lib/auth";
-import crypto from "crypto";
+import { createToken, setAuthCookie } from "@/lib/auth";
+import {
+  GOOGLE_COOKIE_PATH,
+  GOOGLE_NEXT_COOKIE,
+  GOOGLE_STATE_COOKIE,
+  NAME_MAX_LENGTH,
+  emailEquals,
+  findUserByEmail,
+  getAppBaseUrl,
+  normalizeEmail,
+  randomPasswordHash,
+  safeEqual,
+  safeNextPath,
+} from "../../_lib/auth-helpers";
+
+function clearOAuthCookies(response: NextResponse) {
+  for (const name of [GOOGLE_STATE_COOKIE, GOOGLE_NEXT_COOKIE]) {
+    response.cookies.set(name, "", { path: GOOGLE_COOKIE_PATH, maxAge: 0 });
+  }
+  return response;
+}
 
 export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const error = url.searchParams.get("error");
+  const baseUrl = getAppBaseUrl(request);
+  const params = request.nextUrl.searchParams;
 
-  if (error) {
-    return NextResponse.redirect(new URL(`/login?error=${error}`, request.url));
+  // Fixed error codes only — never reflect Google's text into the login page.
+  const fail = (code: string) =>
+    clearOAuthCookies(NextResponse.redirect(new URL(`/login?error=${code}`, baseUrl)));
+
+  const googleError = params.get("error");
+  if (googleError) {
+    return fail(googleError === "access_denied" ? "GoogleAuthCancelled" : "GoogleAuthFailed");
   }
 
-  if (!code) {
-    return NextResponse.redirect(new URL("/login?error=NoCodeProvided", request.url));
+  const code = params.get("code");
+  if (!code) return fail("NoCodeProvided");
+
+  const state = params.get("state");
+  const expectedState = request.cookies.get(GOOGLE_STATE_COOKIE)?.value;
+  if (!state || !expectedState || !safeEqual(state, expectedState)) {
+    console.warn("Google OAuth callback rejected: missing or mismatched state");
+    return fail("GoogleAuthFailed");
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
   if (!clientId || !clientSecret) {
     console.error("Missing Google OAuth credentials");
-    return NextResponse.redirect(new URL("/login?error=ServerConfigurationError", request.url));
+    return fail("GoogleAuthNotConfigured");
   }
 
-  const host = request.headers.get("host") || "localhost:3000";
-  const protocol = host.includes("localhost") ? "http" : "https";
-  const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
-
-  const oauth2Client = new OAuth2Client(clientId, clientSecret, redirectUri);
+  const oauth2Client = new OAuth2Client(
+    clientId,
+    clientSecret,
+    `${baseUrl}/api/auth/google/callback`
+  );
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
-
-    // Verify and decode the ID token
     if (!tokens.id_token) {
       throw new Error("No ID token returned from Google");
     }
@@ -46,57 +71,57 @@ export async function GET(request: NextRequest) {
       idToken: tokens.id_token,
       audience: clientId,
     });
-
     const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      throw new Error("Invalid token payload");
+
+    // Only trust addresses Google has verified, otherwise anyone could claim
+    // someone else's email.
+    if (!payload?.email || payload.email_verified !== true) {
+      return fail("GoogleEmailNotVerified");
     }
+    const email = normalizeEmail(payload.email);
+    if (!email) return fail("GoogleAuthFailed");
 
-    const { email, name } = payload;
+    let user = await findUserByEmail(email);
 
-    // Check if user exists
-    const existingUsers = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-
-    let user;
-
-    if (existingUsers.length > 0) {
-      user = existingUsers[0];
-    } else {
-      // User doesn't exist, create a new one.
-      // Generate a secure random password since password is NOT NULL in schema
-      const randomPassword = crypto.randomBytes(32).toString("hex");
-      const hashedPassword = await hashPassword(randomPassword);
-
-      const newUsers = await db
+    if (user && !user.verified) {
+      // Pre-account-takeover defence: someone may have registered this address
+      // without owning it. Google just proved ownership, so lock out whatever
+      // password was set and mark the account verified.
+      [user] = await db
+        .update(users)
+        .set({
+          password: await randomPasswordHash(),
+          verified: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+      await db.delete(verificationTokens).where(emailEquals(verificationTokens.email, email));
+    } else if (!user) {
+      // Password is NOT NULL in the schema; store an unusable random hash.
+      [user] = await db
         .insert(users)
         .values({
-          email: email,
-          name: name || "Google User",
-          password: hashedPassword,
-          verified: true, // Google users are implicitly verified
+          email,
+          name: (payload.name?.trim() || "Google User").slice(0, NAME_MAX_LENGTH),
+          password: await randomPasswordHash(),
+          verified: true,
           role: "user",
         })
         .returning();
-
-      user = newUsers[0];
     }
 
-    // Generate token and set cookie
     const token = await createToken({
       userId: user.id,
       email: user.email,
       role: user.role,
     });
-
     await setAuthCookie(token);
 
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const next = safeNextPath(request.cookies.get(GOOGLE_NEXT_COOKIE)?.value) ?? "/dashboard";
+    return clearOAuthCookies(NextResponse.redirect(new URL(next, baseUrl)));
   } catch (err) {
     console.error("Google auth callback error:", err);
-    return NextResponse.redirect(new URL("/login?error=GoogleAuthFailed", request.url));
+    return fail("GoogleAuthFailed");
   }
 }

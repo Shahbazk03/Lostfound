@@ -1,43 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { createSubscriptionSession } from "@/lib/stripe";
-import { db } from "@/db";
-import { organizationSettings } from "@/db/schema";
+import { requireAuth } from "@/lib/auth";
+import { authErrorResponse, parseId } from "@/lib/api-errors";
+import {
+  createSubscriptionSession,
+  getAppBaseUrl,
+  getPlatformPricing,
+  paymentsUnavailable,
+  stripe,
+} from "@/lib/stripe";
 
+/**
+ * POST { itemId? } — monthly premium subscription Checkout. itemId only picks
+ * the page Stripe returns to. Responds { sessionUrl, url } or { alreadySubscribed: true }.
+ */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = await requireAuth();
+    if (!stripe) return paymentsUnavailable();
+
+    if (user.hasSubscription) {
+      return NextResponse.json({ alreadySubscribed: true });
     }
 
-    const { itemId } = await request.json();
+    const body = (await request.json().catch(() => null)) as { itemId?: unknown } | null;
+    const itemId = parseId(body?.itemId) ?? undefined;
 
-    const settings = await db.select().from(organizationSettings).limit(1);
-    const amount = settings.length > 0 && settings[0].metadata?.premiumSubscriptionFee 
-      ? Number(settings[0].metadata.premiumSubscriptionFee) 
-      : 499;
-    const currency = settings.length > 0 && settings[0].currency ? settings[0].currency : "usd";
-
-    const sessionUrl = await createSubscriptionSession({
+    const pricing = await getPlatformPricing();
+    const session = await createSubscriptionSession({
       userId: user.id,
       itemId,
-      amount,
-      currency,
+      amount: pricing.subscriptionFee,
+      currency: pricing.currency,
+      baseUrl: getAppBaseUrl(request),
+      customerEmail: user.email,
     });
 
-    if (!sessionUrl) {
-      return NextResponse.json(
-        { error: "Failed to create checkout session" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ sessionUrl });
+    return NextResponse.json({ sessionUrl: session.url, url: session.url });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Subscription checkout error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Could not start checkout. Please try again." },
       { status: 500 }
     );
   }

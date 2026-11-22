@@ -1,47 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { createConversationUnlockSession } from "@/lib/stripe";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizationSettings } from "@/db/schema";
+import { items, unlockedConversations } from "@/db/schema";
+import { requireAuth } from "@/lib/auth";
+import { authErrorResponse, badRequest, parseId } from "@/lib/api-errors";
+import {
+  createConversationUnlockSession,
+  getAppBaseUrl,
+  getPlatformPricing,
+  paymentsUnavailable,
+  stripe,
+} from "@/lib/stripe";
 
+/**
+ * POST { itemId } — one-time Checkout that unlocks messaging for an item.
+ * Responds { sessionUrl, url } (same value) or { alreadyUnlocked: true }.
+ */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = await requireAuth();
+    if (!stripe) return paymentsUnavailable();
+
+    const body = (await request.json().catch(() => null)) as { itemId?: unknown } | null;
+    const itemId = parseId(body?.itemId);
+    if (!itemId) return badRequest("A valid itemId is required");
+
+    const [item] = await db
+      .select({ id: items.id, userId: items.userId, status: items.status })
+      .from(items)
+      .where(eq(items.id, itemId))
+      .limit(1);
+    if (!item) {
+      return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    const { itemId } = await request.json();
-    
-    if (!itemId) {
-      return NextResponse.json({ error: "Item ID is required" }, { status: 400 });
+    // Owners, admins and subscribers can already message — never charge them.
+    if (item.userId === user.id || user.role === "admin" || user.hasSubscription) {
+      return NextResponse.json({ alreadyUnlocked: true });
     }
 
-    const settings = await db.select().from(organizationSettings).limit(1);
-    const amount = settings.length > 0 && settings[0].metadata?.oneTimeUnlockFee 
-      ? Number(settings[0].metadata.oneTimeUnlockFee) 
-      : 100;
-    const currency = settings.length > 0 && settings[0].currency ? settings[0].currency : "usd";
+    const [unlocked] = await db
+      .select({ id: unlockedConversations.id })
+      .from(unlockedConversations)
+      .where(
+        and(
+          eq(unlockedConversations.userId, user.id),
+          eq(unlockedConversations.itemId, itemId)
+        )
+      )
+      .limit(1);
+    if (unlocked) {
+      return NextResponse.json({ alreadyUnlocked: true });
+    }
 
-    const sessionUrl = await createConversationUnlockSession({
+    if (item.status !== "active") {
+      return badRequest("This item is no longer active");
+    }
+
+    const pricing = await getPlatformPricing();
+    const session = await createConversationUnlockSession({
       userId: user.id,
       itemId,
-      amount,
-      currency,
+      amount: pricing.chatUnlockFee,
+      currency: pricing.currency,
+      baseUrl: getAppBaseUrl(request),
+      customerEmail: user.email,
     });
 
-    if (!sessionUrl) {
-      return NextResponse.json(
-        { error: "Failed to create checkout session" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ sessionUrl });
+    return NextResponse.json({ sessionUrl: session.url, url: session.url });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Conversation unlock checkout error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Could not start checkout. Please try again." },
       { status: 500 }
     );
   }

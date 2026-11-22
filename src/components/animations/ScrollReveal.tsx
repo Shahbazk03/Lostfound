@@ -1,17 +1,25 @@
 "use client";
 
-import { motion, Variants } from "framer-motion";
-import { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 interface ScrollRevealProps {
   children: ReactNode;
   animation?: "fade-up" | "slide-in" | "scale-up" | "fade-in";
-  delay?: number;
-  duration?: number;
+  delay?: number; // seconds
+  duration?: number; // seconds
   className?: string;
   once?: boolean;
 }
 
+/**
+ * Reveal-on-scroll without framer-motion.
+ *
+ * The hidden starting state is applied by CSS only when scripting is enabled
+ * and the user hasn't asked for reduced motion (see `[data-reveal]` in
+ * globals.css), so content is never invisible for crawlers, no-JS visitors or
+ * people who prefer less motion. An IntersectionObserver flips
+ * `data-revealed` when the element scrolls into view.
+ */
 export default function ScrollReveal({
   children,
   animation = "fade-up",
@@ -20,45 +28,45 @@ export default function ScrollReveal({
   className = "",
   once = true,
 }: ScrollRevealProps) {
-  const getVariants = (): Variants => {
-    switch (animation) {
-      case "fade-up":
-        return {
-          hidden: { opacity: 0, y: 40 },
-          visible: { opacity: 1, y: 0, transition: { duration, delay, ease: "easeOut" } },
-        };
-      case "slide-in":
-        return {
-          hidden: { opacity: 0, x: -40 },
-          visible: { opacity: 1, x: 0, transition: { duration, delay, ease: "easeOut" } },
-        };
-      case "scale-up":
-        return {
-          hidden: { opacity: 0, scale: 0.9 },
-          visible: { opacity: 1, scale: 1, transition: { duration, delay, ease: "easeOut" } },
-        };
-      case "fade-in":
-        return {
-          hidden: { opacity: 0 },
-          visible: { opacity: 1, transition: { duration, delay, ease: "easeOut" } },
-        };
-      default:
-        return {
-          hidden: { opacity: 0, y: 40 },
-          visible: { opacity: 1, y: 0, transition: { duration, delay, ease: "easeOut" } },
-        };
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      el.dataset.revealed = "true";
+      return;
     }
-  };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            el.dataset.revealed = "true";
+            if (once) observer.disconnect();
+          } else if (!once) {
+            delete el.dataset.revealed;
+          }
+        }
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.01 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [once]);
 
   return (
-    <motion.div
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once, margin: "-10%" }}
-      variants={getVariants()}
+    <div
+      ref={ref}
+      data-reveal={animation}
       className={className}
+      style={{
+        transitionDuration: `${duration}s`,
+        transitionDelay: `${Math.min(delay, 0.6)}s`,
+      }}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

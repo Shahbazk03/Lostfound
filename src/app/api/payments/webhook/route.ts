@@ -1,109 +1,72 @@
 import { NextRequest, NextResponse } from "next/server";
-
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
-import { db } from "@/db";
-import { userSubscriptions, unlockedConversations } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  fulfillCheckoutSession,
+  isPermanentDbError,
+  markCheckoutFailed,
+  syncSubscription,
+} from "../_lib/fulfillment";
 
 export async function POST(request: NextRequest) {
   if (!stripe) {
+    console.error("Stripe webhook received but STRIPE_SECRET_KEY is not configured.");
     return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
   }
 
-  const payload = await request.text();
-  const signature = request.headers.get("stripe-signature");
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  if (!webhookSecret) {
+    console.error(
+      "STRIPE_WEBHOOK_SECRET is not set, so Stripe webhooks cannot be verified and payments " +
+        "will not be recorded. Copy the endpoint's signing secret (whsec_...) from the Stripe " +
+        "dashboard into .env."
+    );
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+  }
 
+  const signature = request.headers.get("stripe-signature");
   if (!signature) {
     return NextResponse.json({ error: "No signature" }, { status: 400 });
   }
 
+  const payload = await request.text();
   let event: Stripe.Event;
-
   try {
-    event = stripe.webhooks.constructEvent(
-      payload,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+    event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+  } catch (err) {
+    console.error(
+      "Webhook signature verification failed:",
+      err instanceof Error ? err.message : err
     );
-  } catch (err: any) {
-    console.error(`Webhook signature verification failed: ${err.message}`);
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
   try {
     switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session;
-        const type = session.metadata?.type;
-        const userId = session.metadata?.userId ? parseInt(session.metadata.userId) : null;
-        
-        if (!userId) break;
-
-        if (type === "monthly_subscription") {
-          const subscriptionId = session.subscription as string;
-          const customerId = session.customer as string;
-          
-          if (!subscriptionId || !customerId) break;
-          
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-          
-          // Check if subscription exists
-          const existing = await db.select().from(userSubscriptions).where(eq(userSubscriptions.userId, userId)).limit(1);
-          
-          if (existing.length > 0) {
-            await db.update(userSubscriptions)
-              .set({
-                stripeSubscriptionId: subscriptionId,
-                stripeCustomerId: customerId,
-                status: subscription.status as any,
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
-                updatedAt: new Date(),
-              })
-              .where(eq(userSubscriptions.userId, userId));
-          } else {
-            await db.insert(userSubscriptions).values({
-              userId,
-              stripeSubscriptionId: subscriptionId,
-              stripeCustomerId: customerId,
-              status: subscription.status as any,
-              plan: "premium",
-              currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
-            });
-          }
-        } else if (type === "conversation_unlock") {
-          const itemId = session.metadata?.itemId ? parseInt(session.metadata.itemId) : null;
-          
-          if (!itemId) break;
-          
-          await db.insert(unlockedConversations).values({
-            userId,
-            itemId,
-          });
-        }
+      case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded":
+        await fulfillCheckoutSession(stripe, event.data.object);
         break;
-      }
+      case "checkout.session.expired":
+      case "checkout.session.async_payment_failed":
+        await markCheckoutFailed(event.data.object);
+        break;
       case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as any;
-        
-        await db.update(userSubscriptions)
-          .set({
-            status: subscription.status as any,
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-            updatedAt: new Date(),
-          })
-          .where(eq(userSubscriptions.stripeSubscriptionId, subscription.id));
+      case "customer.subscription.deleted":
+        await syncSubscription(event.data.object, event.type === "customer.subscription.deleted");
         break;
-      }
     }
-
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("Webhook processing error:", error);
-    return NextResponse.json(
-      { error: "Webhook processing failed" },
-      { status: 500 }
-    );
+    if (isPermanentDbError(error)) {
+      console.error(
+        `Webhook ${event.id} (${event.type}) hit a permanent DB error; not retrying:`,
+        error
+      );
+      return NextResponse.json({ received: true });
+    }
+    // Transient failure (DB unreachable, Stripe API hiccup): 500 makes Stripe retry.
+    console.error(`Webhook ${event.id} (${event.type}) processing error:`, error);
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 }

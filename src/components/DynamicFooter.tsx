@@ -1,173 +1,214 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { Search, MapPin, Mail, Phone, ArrowRight, Globe, MessageCircle } from "lucide-react";
-import { defaultFooterGroups, FooterGroup } from "@/lib/footer-constants";
+import { Mail, MapPin, ArrowUpRight } from "lucide-react";
+import { useSettings } from "@/lib/settings-context";
+import { BrandLogo } from "@/components/home/BrandMark";
 
+interface FooterLink {
+  label: string;
+  url?: string;
+  /** Set when the link points at a CMS page the caller resolved as published. */
+  pageId?: number;
+}
+
+interface FooterColumn {
+  title: string;
+  links: FooterLink[];
+}
+
+const DEFAULT_COLUMNS: FooterColumn[] = [
+  {
+    title: "Product",
+    links: [
+      { label: "Browse listings", url: "/browse" },
+      { label: "Report an item", url: "/report" },
+      { label: "How it works", url: "/#how-it-works" },
+    ],
+  },
+  {
+    title: "Account",
+    links: [
+      { label: "Log in", url: "/login" },
+      { label: "Create an account", url: "/register" },
+      { label: "Dashboard", url: "/dashboard" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Terms of Service", url: "/terms" },
+      { label: "Privacy Policy", url: "/privacy" },
+      { label: "Cookie Policy", url: "/cookies" },
+    ],
+  },
+];
+
+// Routes that exist in the app. CMS links to anything else are dropped unless
+// the caller resolved them to a published CMS page (they then carry pageId).
+const KNOWN_PATHS = new Set([
+  "/",
+  "/browse",
+  "/report",
+  "/terms",
+  "/privacy",
+  "/cookies",
+  "/login",
+  "/register",
+  "/dashboard",
+  "/messages",
+  "/profile",
+]);
+
+function usableUrl(link: FooterLink | null | undefined): string | null {
+  const url = typeof link?.url === "string" ? link.url.trim() : "";
+  if (!url || !link?.label) return null;
+  if (/^https:\/\//i.test(url) || /^mailto:/i.test(url)) return url;
+  if (!url.startsWith("/") || url.startsWith("//")) return null;
+  if (link.pageId) return url;
+  const path = url.split(/[?#]/)[0] || "/";
+  return KNOWN_PATHS.has(path) || path.startsWith("/items/") ? url : null;
+}
+
+/** CMS columns with dead links removed; empty columns are dropped. */
+function cleanColumns(columns: unknown): FooterColumn[] {
+  if (!Array.isArray(columns)) return [];
+  return columns
+    .map((col) => ({
+      title: typeof col?.title === "string" ? col.title : "",
+      links: (Array.isArray(col?.links) ? col.links : [])
+        .map((link: FooterLink) => ({ label: String(link?.label ?? ""), url: usableUrl(link) ?? "" }))
+        .filter((link: FooterLink) => link.url),
+    }))
+    .filter((col) => col.title && col.links.length > 0)
+    .slice(0, 3);
+}
+
+function titleCase(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+}
+
+const linkClass =
+  "rounded text-sm text-slate-600 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-white";
+
+/**
+ * Site footer. `footerData` is the CMS footer row (optional). Contact details
+ * come from the public organisation settings already loaded by
+ * SettingsProvider, so the footer makes no request of its own.
+ */
 export default function DynamicFooter({ footerData }: { footerData?: any }) {
-  const [settings, setSettings] = useState<any>({});
+  const { settings } = useSettings();
 
-  useEffect(() => {
-    fetch("/api/settings")
-      .then((res) => res.json())
-      .then((data) => setSettings(data.settings || data))
-      .catch((err) => console.error("Error fetching footer settings:", err));
-  }, []);
-
-  const orgName = settings.organizationName || "LOSTFOUND";
-  
-  // Use CMS data if available, otherwise fallback to settings
-  const desc = footerData?.description || settings.metadata?.footerDescription || "Empowering communities globally to connect lost belongings with their rightful owners. Trusted, secure, and fast.";
-  const copyright = footerData?.copyrightText || settings.metadata?.copyrightText || `© ${new Date().getFullYear()} ${orgName} Inc. All rights reserved.`;
-  const contactEmail = footerData?.contactEmail || settings.contactEmail || "hello@lostfound.com";
-  const contactPhone = footerData?.contactPhone || settings.supportPhone || "+1 (555) 123-4567";
-  
-  const fb = settings.metadata?.facebookUrl || "#";
-  const tw = settings.metadata?.twitterUrl || "#";
-  
-  const address = settings.address || "123 Innovation Drive";
-  const city = settings.city || "San Francisco, CA 94103";
-  const country = settings.country || "USA";
-
-  const footerGroups: FooterGroup[] = footerData?.footerLinks?.length > 0 
-    ? footerData.footerLinks 
-    : (Array.isArray(settings.metadata?.footerGroups) && settings.metadata.footerGroups.length > 0
-      ? settings.metadata.footerGroups 
-      : defaultFooterGroups);
-      
-  const socialLinks = footerData?.socialLinks || [];
-  const showNewsletter = footerData ? footerData.newsletterEnabled : true;
-  
   if (footerData && footerData.isActive === false) return null;
 
+  const cmsColumns = cleanColumns(footerData?.footerLinks);
+  const settingsColumns = cleanColumns(settings?.metadata?.footerGroups);
+  const columns = cmsColumns.length > 0 ? cmsColumns : settingsColumns.length > 0 ? settingsColumns : DEFAULT_COLUMNS;
+
+  const orgName = (typeof settings?.organizationName === "string" && settings.organizationName.trim()) || "LostFound";
+  const description =
+    footerData?.description ||
+    settings?.metadata?.footerDescription ||
+    "A community lost & found. Report what you've lost or found, get matched with the right person, and arrange a safe return.";
+  const year = new Date().getFullYear();
+  const copyright = footerData?.copyrightText || settings?.metadata?.copyrightText || `© ${year} ${orgName}. All rights reserved.`;
+  const email: string | null = footerData?.contactEmail || settings?.supportEmail || settings?.contactEmail || null;
+  const place = [settings?.city, settings?.country]
+    .filter((p): p is string => typeof p === "string" && p.trim() !== "")
+    .map(titleCase)
+    .join(", ");
+
+  const socialLinks: { platform?: string; url?: string }[] = (Array.isArray(footerData?.socialLinks) ? footerData.socialLinks : [])
+    .filter((s: { url?: string }) => typeof s?.url === "string" && /^https:\/\//i.test(s.url));
+
   return (
-    <footer className="bg-[#0b1120] text-slate-400 pt-20 pb-10 border-t border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Top Section: Newsletter & Branding */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-10 mb-16 pb-12 border-b border-slate-800/60">
-          {showNewsletter ? (
-            <div className="max-w-md">
-              <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">Stay updated</h3>
-              <p className="text-sm text-slate-400 mb-6">
-                Join our newsletter for the latest platform features, success stories, and safety tips.
-              </p>
-              <div className="flex gap-2 relative">
-                <input 
-                  type="email" 
-                  placeholder="Enter your email address" 
-                  className="w-full bg-slate-900/50 border border-slate-800 text-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
-                />
-                <button className="absolute right-1.5 top-1.5 bottom-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-5 rounded-lg font-medium transition-colors flex items-center gap-2">
-                  Subscribe
-                </button>
-              </div>
-            </div>
-          ) : <div className="flex-1" />}
-          
-          <div className="flex flex-col items-start lg:items-end text-left lg:text-right">
-            <div className="flex items-center gap-3 mb-4">
+    <footer className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+      <div className="mx-auto max-w-[1600px] px-4 py-14 sm:px-6 md:py-16 lg:px-8">
+        <div className="grid gap-10 md:grid-cols-12">
+          {/* Brand + mission + contact */}
+          <div className="md:col-span-5 lg:col-span-4">
+            <Link href="/" aria-label="LostFound home" className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
               {footerData?.logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={footerData.logo} alt="Logo" className="h-10 w-auto" />
+                <img src={footerData.logo} alt="" className="h-9 w-auto" loading="lazy" decoding="async" />
               ) : (
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                  <span className="text-white font-bold text-lg tracking-wider">LF</span>
-                </div>
+                <BrandLogo />
               )}
-              {!footerData?.logo && <span className="text-3xl font-extrabold text-white tracking-tight">{orgName}</span>}
-            </div>
-            <p className="text-sm max-w-xs leading-relaxed text-slate-400">
-              {desc}
-            </p>
-          </div>
-        </div>
+            </Link>
+            <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-600 dark:text-slate-400">{description}</p>
 
-        {/* Main Grid: Links & Info */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 lg:gap-12 mb-16">
-          <div className="col-span-2 lg:col-span-2">
-            <h4 className="text-white font-semibold mb-6 tracking-wide">Contact Us</h4>
-            <ul className="space-y-4">
-              <li className="flex items-start gap-3">
-                <Mail className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-300">Email Support</p>
-                  <a href={`mailto:${contactEmail}`} className="text-sm hover:text-emerald-400 transition-colors">{contactEmail}</a>
-                </div>
-              </li>
-              <li className="flex items-start gap-3">
-                <Phone className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-300">Call Us</p>
-                  <p className="text-sm">{contactPhone}</p>
-                </div>
-              </li>
-              <li className="flex items-start gap-3">
-                <MapPin className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-300">Global Headquarters</p>
-                  <p className="text-sm">{address}<br/>{city}, {country}</p>
-                </div>
-              </li>
-            </ul>
-          </div>
-          
-          {(Array.isArray(footerGroups) ? footerGroups : defaultFooterGroups).map((group, i) => (
-            <div key={i}>
-              <h4 className="text-white font-semibold mb-6 tracking-wide">{group?.title || ""}</h4>
-              <ul className="space-y-3 text-sm">
-                {(Array.isArray(group?.links) ? group.links : []).map((link, j) => (
-                  <li key={j}>
-                    <Link href={link?.url || "#"} className="hover:text-emerald-400 transition-colors flex items-center gap-2 group">
-                      <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity -ml-5 group-hover:ml-0" /> 
-                      {link?.label || ""}
-                    </Link>
+            {(email || place) && (
+              <ul className="mt-6 space-y-2.5 text-sm">
+                {email && (
+                  <li>
+                    <a href={`mailto:${email}`} className={`inline-flex items-center gap-2.5 ${linkClass}`}>
+                      <Mail className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                      {email}
+                    </a>
                   </li>
-                ))}
+                )}
+                {place && (
+                  <li className="flex items-center gap-2.5 text-slate-600 dark:text-slate-400">
+                    <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    {place}
+                  </li>
+                )}
               </ul>
-            </div>
-          ))}
-        </div>
-
-        {/* Bottom Bar: Copyright & Socials */}
-        <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-slate-800/60 gap-4">
-          <div className="flex flex-col md:flex-row items-center gap-4 text-xs">
-            <span>{copyright}</span>
-            <div className="hidden md:block w-1 h-1 bg-slate-700 rounded-full"></div>
-            <div className="flex gap-4">
-              <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
-              <Link href="/cookies" className="hover:text-white transition-colors">Cookie Settings</Link>
-            </div>
-          </div>
-          
-          <div className="flex gap-4">
-            {socialLinks.length > 0 ? (
-              socialLinks.map((social: any, i: number) => {
-                return (
-                  <a key={i} href={social.url} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all">
-                    <Globe className="w-4 h-4" />
-                  </a>
-                );
-              })
-            ) : (
-              <>
-                {tw && (
-                  <a href={tw} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all">
-                    <MessageCircle className="w-4 h-4" />
-                  </a>
-                )}
-                {fb && (
-                  <a href={fb} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all">
-                    <Globe className="w-4 h-4" />
-                  </a>
-                )}
-              </>
             )}
           </div>
+
+          {/* Link columns */}
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 md:col-span-7 lg:col-span-7 lg:col-start-6">
+            {columns.map((column) => (
+              <nav key={column.title} aria-label={column.title}>
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">{column.title}</h2>
+                <ul className="mt-4 space-y-3">
+                  {column.links.map((link) => {
+                    const url = link.url!;
+                    const external = /^https:\/\//i.test(url);
+                    return (
+                      <li key={`${link.label}-${url}`}>
+                        {external || url.startsWith("mailto:") ? (
+                          <a
+                            href={url}
+                            {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                            className={`inline-flex items-center gap-1 ${linkClass}`}
+                          >
+                            {link.label}
+                            {external && <ArrowUpRight className="h-3.5 w-3.5 opacity-60" aria-hidden />}
+                          </a>
+                        ) : (
+                          <Link href={url} className={linkClass}>
+                            {link.label}
+                          </Link>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+            ))}
+          </div>
         </div>
 
+        <div className="mt-12 flex flex-col gap-4 border-t border-slate-200 pt-6 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+          <p>{copyright}</p>
+          {socialLinks.length > 0 && (
+            <ul className="flex flex-wrap gap-x-5 gap-y-2">
+              {socialLinks.map((social) => (
+                <li key={social.url}>
+                  <a href={social.url} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 ${linkClass}`}>
+                    {social.platform || "Social"}
+                    <ArrowUpRight className="h-3.5 w-3.5 opacity-60" aria-hidden />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </footer>
   );

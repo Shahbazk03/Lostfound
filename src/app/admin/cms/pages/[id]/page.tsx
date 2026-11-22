@@ -1,253 +1,521 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Plus, Trash2, GripVertical, Settings, Eye, Code, FileText, MoveUp, MoveDown, RefreshCw } from "lucide-react";
+import { use, useCallback, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import Link from "next/link";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Building2,
+  ChevronDown,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  FileText,
+  HelpCircle,
+  History,
+  Images,
+  LayoutGrid,
+  LayoutTemplate,
+  Mail,
+  Megaphone,
+  Minus,
+  PieChart,
+  Quote,
+  Settings2,
+  Trash2,
+  Type,
+  Users,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { adminFetch, errorMessage } from "@/components/admin/admin-api";
+import { useAdminLoader } from "@/components/admin/useAdminLoader";
+import { useConfirm, useToast } from "@/components/admin/AdminFeedback";
+import { ErrorState } from "@/components/admin/AdminStates";
+import { CharCount, Field, Input, Select, Textarea } from "@/components/admin/ui/Form";
+import { SaveBar, useUnsavedChanges } from "@/components/admin/ui/SaveBar";
+import { Skeleton } from "@/components/admin/ui/Skeleton";
+import { StatusBadge } from "@/components/admin/ui/StatusBadge";
+import { focusRing, iconButton } from "@/components/admin/ui/styles";
 import { BlockRenderer } from "@/components/cms/BlockRenderer";
 import { TiptapEditor } from "@/components/cms/TiptapEditor";
+
+const SLUG_PATTERN = /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/;
+
+type Tab = "content" | "settings" | "preview";
+
+const BLOCK_TYPES: { type: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
+  { type: "hero", label: "Hero", icon: LayoutTemplate },
+  { type: "rich-text", label: "Rich text", icon: Type },
+  { type: "feature-grid", label: "Feature grid", icon: LayoutGrid },
+  { type: "faq", label: "FAQ list", icon: HelpCircle },
+  { type: "statistics", label: "Statistics", icon: PieChart },
+  { type: "testimonials", label: "Testimonials", icon: Quote },
+  { type: "team", label: "Team", icon: Users },
+  { type: "logo-cloud", label: "Logo cloud", icon: Building2 },
+  { type: "timeline", label: "Timeline", icon: History },
+  { type: "gallery", label: "Gallery", icon: Images },
+  { type: "cta", label: "Call to action", icon: Megaphone },
+  { type: "contact-form", label: "Contact form", icon: Mail },
+  { type: "divider", label: "Divider", icon: Minus },
+];
+
+const blockMeta = (type: string) =>
+  BLOCK_TYPES.find((b) => b.type === type) ?? { type, label: type.replace(/-/g, " "), icon: FileText };
+
+const snapshot = (page: unknown, blocks: unknown) => JSON.stringify({ page, blocks });
+
+// Unsaved blocks get a temporary id; the server replaces it on save.
+let tempCounter = 0;
+function nextTempId() {
+  tempCounter += 1;
+  return `temp-${Date.now()}-${tempCounter}`;
+}
 
 export default function CMSPageEditor({ params }: { params: Promise<{ id: string }> }) {
   const p = use(params);
   const pageId = p.id;
-  const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [page, setPage] = useState<any>(null);
   const [blocks, setBlocks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [baseline, setBaseline] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"content" | "settings">("content");
+  const [tab, setTab] = useState<Tab>("content");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchPage();
+  const loadPage = useCallback(async () => {
+    const data = await adminFetch<{ page: any; blocks?: any[] }>(
+      `/api/admin/cms/pages/${pageId}`,
+      {},
+      "Failed to load page"
+    );
+    setPage(data.page);
+    setBlocks(data.blocks || []);
+    setBaseline(snapshot(data.page, data.blocks || []));
   }, [pageId]);
+  const { loading, error: loadError, reload } = useAdminLoader(loadPage, "Failed to load page");
 
-  const fetchPage = async () => {
-    try {
-      const res = await fetch(`/api/admin/cms/pages/${pageId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPage(data.page);
-        setBlocks(data.blocks || []);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const dirty = baseline !== null && page !== null && snapshot(page, blocks) !== baseline;
+  const savedPage = useMemo(() => (baseline ? (JSON.parse(baseline).page as any) : null), [baseline]);
 
-  const savePage = async () => {
+  // Inline validation (mirrors the API).
+  const errors: Record<string, string> = {};
+  if (page) {
+    const title = typeof page.title === "string" ? page.title.trim() : "";
+    if (!title) errors.title = "Title is required";
+    else if (title.length > 255) errors.title = "Keep the title under 255 characters";
+    const slug = typeof page.slug === "string" ? page.slug.trim() : "";
+    if (!slug) errors.slug = "URL slug is required";
+    else if (slug.length > 255 || !SLUG_PATTERN.test(slug)) errors.slug = "Use letters, numbers, - and _ only";
+  }
+  const errorCount = Object.keys(errors).length;
+
+  const savePage = useCallback(async () => {
+    if (!page || saving || errorCount > 0) return;
     setSaving(true);
     try {
-      await fetch(`/api/admin/cms/pages/${pageId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ page, blocks }),
-      });
+      const data = await adminFetch<{ page?: any; blocks?: any[] }>(
+        `/api/admin/cms/pages/${pageId}`,
+        { method: "PUT", json: { page, blocks } },
+        "Failed to save page"
+      );
+      // Adopt the server's copy so temp ids are replaced with real ones.
+      const nextPage = data?.page ?? page;
+      const nextBlocks = Array.isArray(data?.blocks) ? data.blocks : blocks;
+      setPage(nextPage);
+      setBlocks(nextBlocks);
+      setBaseline(snapshot(nextPage, nextBlocks));
+      toast.success(nextPage.status === "published" ? "Page saved and live" : "Page saved");
     } catch (err) {
-      console.error(err);
+      toast.error(errorMessage(err, "Failed to save page"));
     } finally {
       setSaving(false);
     }
+  }, [page, blocks, pageId, saving, errorCount, toast]);
+
+  useUnsavedChanges(dirty, { onSave: savePage, guardLinks: true });
+
+  const discard = async () => {
+    if (!baseline) return;
+    const ok = await confirm({
+      title: "Discard unsaved changes?",
+      message: "The page goes back to how it was when you last saved.",
+      confirmLabel: "Discard",
+    });
+    if (!ok) return;
+    const snap = JSON.parse(baseline);
+    setPage(snap.page);
+    setBlocks(snap.blocks);
   };
 
+  const updatePage = (key: string, value: unknown) => setPage((prev: any) => ({ ...prev, [key]: value }));
+
   const addBlock = (type: string) => {
-    const newBlock = {
-      id: `temp-${Date.now()}`,
-      type,
-      content: getDefaultContentForBlock(type),
-    };
-    setBlocks([...blocks, newBlock]);
+    const newBlock = { id: nextTempId(), type, content: getDefaultContentForBlock(type) };
+    setBlocks((prev) => [...prev, newBlock]);
+    setTab("content");
+    window.requestAnimationFrame(() => {
+      document.getElementById(`block-${newBlock.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   const updateBlockContent = (index: number, key: string, value: any) => {
-    const newBlocks = [...blocks];
-    newBlocks[index] = {
-      ...newBlocks[index],
-      content: { ...newBlocks[index].content, [key]: value },
-    };
-    setBlocks(newBlocks);
+    setBlocks((prev) =>
+      prev.map((b, i) => (i === index ? { ...b, content: { ...(b.content || {}), [key]: value } } : b))
+    );
   };
 
-  const moveBlock = (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index > 0) {
-      const newBlocks = [...blocks];
-      const temp = newBlocks[index];
-      newBlocks[index] = newBlocks[index - 1];
-      newBlocks[index - 1] = temp;
-      setBlocks(newBlocks);
-    } else if (direction === 'down' && index < blocks.length - 1) {
-      const newBlocks = [...blocks];
-      const temp = newBlocks[index];
-      newBlocks[index] = newBlocks[index + 1];
-      newBlocks[index + 1] = temp;
-      setBlocks(newBlocks);
-    }
+  const moveBlock = (index: number, direction: "up" | "down") => {
+    const to = direction === "up" ? index - 1 : index + 1;
+    setBlocks((prev) => {
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(index, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
   };
 
-  const removeBlock = (index: number) => {
-    const newBlocks = [...blocks];
-    newBlocks.splice(index, 1);
-    setBlocks(newBlocks);
+  const removeBlock = async (index: number) => {
+    const label = blockMeta(String(blocks[index]?.type ?? "block")).label.toLowerCase();
+    const ok = await confirm({
+      title: `Remove this ${label} block?`,
+      message: "It disappears from the page the next time you save.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    setBlocks((prev) => prev.filter((_, i) => i !== index));
   };
 
-  if (loading) return <div className="p-12 text-center">Loading editor...</div>;
-  if (!page) return <div className="p-12 text-center">Page not found</div>;
+  const blockKey = (block: any, index: number) => String(block.id ?? `i-${index}`);
+  const toggleCollapsed = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  if (loading) return <EditorSkeleton />;
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-12">
+        <ErrorState message={loadError} onRetry={reload} />
+      </div>
+    );
+  }
+  if (!page) return <ErrorState message="Page not found" />;
+
+  const isLive = savedPage?.status === "published";
+  const seoTitleLen = (page.seoTitle || "").length;
+  const seoDescLen = (page.seoDescription || "").length;
+
+  const tabs: { id: Tab; label: string; icon: ComponentType<{ className?: string }>; mobileOnly?: boolean }[] = [
+    { id: "content", label: `Content (${blocks.length})`, icon: FileText },
+    { id: "settings", label: "Settings", icon: Settings2 },
+    { id: "preview", label: "Preview", icon: Eye, mobileOnly: true },
+  ];
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950 overflow-hidden">
-      {/* LEFT: EDITOR PANEL */}
-      <div className="w-[450px] flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-full overflow-hidden">
-        
-        {/* Editor Header */}
-        <div className="h-16 px-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/admin/cms/pages")} className="p-2 -ml-2 text-slate-400 hover:text-slate-600 rounded-lg">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h2 className="font-semibold text-slate-900 dark:text-white truncate max-w-[150px]">{page.title}</h2>
+    <div className="flex h-[calc(100dvh-4rem)] flex-col bg-slate-50 dark:bg-slate-950">
+      {/* Header */}
+      <div className="shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center gap-3 px-3 py-3 sm:px-5">
+          <Link href="/admin/cms/pages" className={iconButton} aria-label="Back to pages">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-base font-semibold text-slate-900 sm:text-lg dark:text-white">
+                {page.title?.trim() || "Untitled page"}
+              </h1>
+              <StatusBadge kind="page" status={page.status} className="hidden sm:inline-flex" />
+            </div>
+            <p className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">/{page.slug}</p>
           </div>
-          <div className="flex items-center gap-2">
+          {isLive ? (
             <a
-              href={`/${page.slug}`}
+              href={`/${savedPage.slug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-900/30 px-3 py-1.5 rounded-md font-medium text-sm flex items-center gap-2 transition"
-            >
-              <Eye className="w-4 h-4" />
-              View Live
-            </a>
-            <button
-              onClick={savePage}
-              disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-md font-medium text-sm flex items-center gap-2 transition disabled:opacity-50"
-            >
-              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 shrink-0">
-          <button 
-            onClick={() => setActiveTab("content")} 
-            className={`flex-1 py-3 text-sm font-medium border-b-2 ${activeTab === "content" ? "border-emerald-500 text-emerald-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}
-          >
-            <div className="flex items-center justify-center gap-2"><FileText className="w-4 h-4" /> Content</div>
-          </button>
-          <button 
-            onClick={() => setActiveTab("settings")} 
-            className={`flex-1 py-3 text-sm font-medium border-b-2 ${activeTab === "settings" ? "border-emerald-500 text-emerald-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}
-          >
-            <div className="flex items-center justify-center gap-2"><Settings className="w-4 h-4" /> Settings</div>
-          </button>
-        </div>
-
-        {/* Editor Content Scroll Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          
-          {activeTab === "settings" && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Page Title</label>
-                <input type="text" value={page.title} onChange={e => setPage({...page, title: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">URL Slug</label>
-                <input type="text" value={page.slug} onChange={e => setPage({...page, slug: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Status</label>
-                <select value={page.status} onChange={e => setPage({...page, status: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="scheduled">Scheduled</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </div>
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-                <h3 className="font-medium text-slate-900 dark:text-white mb-4">SEO Metadata</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">SEO Title</label>
-                    <input type="text" value={page.seoTitle || ""} onChange={e => setPage({...page, seoTitle: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm" placeholder={page.title} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Meta Description</label>
-                    <textarea rows={3} value={page.seoDescription || ""} onChange={e => setPage({...page, seoDescription: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "content" && (
-            <div className="space-y-6">
-              {blocks.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                  <p className="mb-2">No content blocks yet.</p>
-                  <p className="text-xs">Add a block below to start building your page.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {blocks.map((block, index) => (
-                    <div key={block.id || index} className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                      <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                        <div className="flex items-center gap-2">
-                          <GripVertical className="w-4 h-4 text-slate-400 cursor-grab" />
-                          <span className="font-semibold text-sm capitalize text-slate-700 dark:text-slate-200">{block.type.replace("-", " ")}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => moveBlock(index, 'up')} className="p-1 text-slate-400 hover:text-slate-700"><MoveUp className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => moveBlock(index, 'down')} className="p-1 text-slate-400 hover:text-slate-700"><MoveDown className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => removeBlock(index)} className="p-1 text-slate-400 hover:text-rose-500 ml-1"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </div>
-                      
-                      <div className="p-4 space-y-3">
-                        {renderBlockEditor(block, index, updateBlockContent)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              className={cn(
+                "inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800",
+                focusRing
               )}
-
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Add Content Block</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => addBlock('hero')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Hero Section</button>
-                  <button onClick={() => addBlock('rich-text')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Rich Text</button>
-                  <button onClick={() => addBlock('feature-grid')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Feature Grid</button>
-                  <button onClick={() => addBlock('faq')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">FAQ List</button>
-                  <button onClick={() => addBlock('statistics')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Statistics</button>
-                  <button onClick={() => addBlock('testimonials')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Testimonials</button>
-                  <button onClick={() => addBlock('team')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Team</button>
-                  <button onClick={() => addBlock('logo-cloud')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Logo Cloud</button>
-                  <button onClick={() => addBlock('timeline')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Timeline</button>
-                  <button onClick={() => addBlock('gallery')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Gallery</button>
-                  <button onClick={() => addBlock('cta')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">CTA</button>
-                  <button onClick={() => addBlock('contact-form')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Contact Form</button>
-                  <button onClick={() => addBlock('divider')} className="px-3 py-2 text-sm text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition">Divider</button>
-                </div>
-              </div>
-            </div>
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">View live</span>
+            </a>
+          ) : (
+            <span className="hidden shrink-0 items-center gap-1.5 text-xs text-slate-500 sm:inline-flex dark:text-slate-400">
+              <EyeOff className="h-4 w-4" />
+              Publish to view it live
+            </span>
           )}
+        </div>
+        <div role="tablist" aria-label="Editor" className="flex gap-1 px-3 sm:px-5">
+          {tabs.map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  "-mb-px inline-flex h-11 items-center gap-2 border-b-2 px-3 text-sm font-medium transition",
+                  focusRing,
+                  t.mobileOnly && "lg:hidden",
+                  active
+                    ? "border-emerald-600 text-emerald-700 dark:border-emerald-400 dark:text-emerald-400"
+                    : "border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                )}
+              >
+                <t.icon className="h-4 w-4" />
+                {t.label}
+                {t.id === "settings" && errorCount > 0 && (
+                  <span className="h-2 w-2 rounded-full bg-red-500" aria-label="has errors" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* RIGHT: LIVE PREVIEW PANEL */}
-      <div className="flex-1 bg-slate-100 dark:bg-slate-950 flex flex-col h-full relative">
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-800 shadow-sm rounded-full px-4 py-2 flex items-center gap-2 text-xs font-medium text-slate-500">
-          <Eye className="w-4 h-4" /> Live Preview
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {/* We render the actual blocks in a scaled view or just 100% width. We will render them 100% to reflect reality. */}
-          <div className="min-h-full bg-slate-50 dark:bg-slate-950 shadow-2xl">
-            {blocks.map((block, i) => (
-              <BlockRenderer key={block.id || i} block={block} />
-            ))}
+      <div className="flex min-h-0 flex-1">
+        {/* Editor panel */}
+        <div
+          className={cn(
+            "min-h-0 w-full flex-col overflow-y-auto border-slate-200 lg:flex lg:w-[460px] lg:shrink-0 lg:border-r xl:w-[520px] dark:border-slate-800",
+            tab === "preview" ? "hidden" : "flex"
+          )}
+        >
+          <div className="space-y-5 px-4 py-5 sm:px-5">
+            {tab === "settings" ? (
+              <>
+                <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Page</h2>
+                  <Field label="Title" required error={errors.title} aside={<CharCount value={page.title} max={255} />}>
+                    <Input value={page.title ?? ""} onChange={(e) => updatePage("title", e.target.value)} />
+                  </Field>
+                  <Field
+                    label="URL slug"
+                    required
+                    error={errors.slug}
+                    hint={`Public address: /${(page.slug ?? "").trim() || "…"}`}
+                  >
+                    <Input
+                      value={page.slug ?? ""}
+                      onChange={(e) => updatePage("slug", e.target.value)}
+                      className="font-mono"
+                      spellCheck={false}
+                      autoCapitalize="none"
+                    />
+                  </Field>
+                  <Field
+                    label="Status"
+                    hint={page.status === "published" ? "Visible to everyone after you save." : "Only published pages are visible on the site."}
+                  >
+                    <Select value={page.status} onChange={(e) => updatePage("status", e.target.value)}>
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="archived">Archived</option>
+                    </Select>
+                  </Field>
+                </section>
+
+                <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Search engines</h2>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">How the page appears in Google and link previews.</p>
+                  </div>
+                  <Field
+                    label="SEO title"
+                    aside={<CharCount value={page.seoTitle} max={60} soft />}
+                    hint={seoTitleLen > 60 ? "Over 60 characters may be cut off in search results." : "Leave empty to use the page title."}
+                  >
+                    <Input
+                      value={page.seoTitle || ""}
+                      onChange={(e) => updatePage("seoTitle", e.target.value)}
+                      placeholder={page.title}
+                      className={cn(seoTitleLen > 60 && "border-amber-400 dark:border-amber-500/60")}
+                    />
+                  </Field>
+                  <Field
+                    label="Meta description"
+                    aside={<CharCount value={page.seoDescription} max={160} soft />}
+                    hint={seoDescLen > 160 ? "Over 160 characters may be cut off in search results." : "One or two sentences that sum up the page."}
+                  >
+                    <Textarea
+                      rows={3}
+                      value={page.seoDescription || ""}
+                      onChange={(e) => updatePage("seoDescription", e.target.value)}
+                      className={cn(seoDescLen > 160 && "border-amber-400 dark:border-amber-500/60")}
+                    />
+                  </Field>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Search preview</p>
+                    <p className="mt-2 truncate text-base text-sky-700 dark:text-sky-400">{page.seoTitle || page.title || "Untitled page"}</p>
+                    <p className="truncate text-xs text-emerald-700 dark:text-emerald-500">/{page.slug}</p>
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-600 dark:text-slate-400">
+                      {page.seoDescription || "Add a meta description to control this text."}
+                    </p>
+                  </div>
+                </section>
+              </>
+            ) : (
+              <>
+                {blocks.length === 0 ? (
+                  <div className="rounded-2xl border-2 border-dashed border-slate-200 px-4 py-10 text-center dark:border-slate-800">
+                    <p className="font-semibold text-slate-900 dark:text-white">No content blocks yet</p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Pick a block below to start building the page.</p>
+                  </div>
+                ) : (
+                  <ol className="space-y-4">
+                    {blocks.map((block, index) => {
+                      const key = blockKey(block, index);
+                      const meta = blockMeta(block.type);
+                      const isCollapsed = collapsed.has(key);
+                      return (
+                        <li
+                          key={key}
+                          id={`block-${block.id ?? index}`}
+                          className="scroll-mt-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                        >
+                          <div className="flex items-center gap-1 border-b border-slate-100 py-1.5 pl-2 pr-1.5 dark:border-slate-800">
+                            <button
+                              type="button"
+                              onClick={() => toggleCollapsed(key)}
+                              aria-expanded={!isCollapsed}
+                              className={cn(
+                                "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800",
+                                focusRing
+                              )}
+                            >
+                              <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", isCollapsed && "-rotate-90")} />
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                                <meta.icon className="h-4 w-4" />
+                              </span>
+                              <span className="truncate capitalize">{meta.label}</span>
+                              <span className="text-xs font-normal text-slate-400">#{index + 1}</span>
+                            </button>
+                            <button type="button" onClick={() => moveBlock(index, "up")} disabled={index === 0} className={iconButton} aria-label={`Move ${meta.label} block up`}>
+                              <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveBlock(index, "down")}
+                              disabled={index === blocks.length - 1}
+                              className={iconButton}
+                              aria-label={`Move ${meta.label} block down`}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeBlock(index)}
+                              className={cn(iconButton, "hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400")}
+                              aria-label={`Remove ${meta.label} block`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          {!isCollapsed && <div className="space-y-4 p-4">{renderBlockEditor(block, index, updateBlockContent)}</div>}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+
+                <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Add a block</h2>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {BLOCK_TYPES.map((b) => (
+                      <button
+                        key={b.type}
+                        type="button"
+                        onClick={() => addBlock(b.type)}
+                        className={cn(
+                          "flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-emerald-500/50 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300",
+                          focusRing
+                        )}
+                      >
+                        <b.icon className="h-4 w-4 shrink-0 text-slate-400" />
+                        <span className="truncate">{b.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
           </div>
+        </div>
+
+        {/* Live preview */}
+        <div className={cn("min-h-0 min-w-0 flex-1 flex-col lg:flex", tab === "preview" ? "flex" : "hidden")}>
+          <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            <span className="flex items-center gap-2">
+              <Eye className="h-4 w-4" /> Live preview
+              <span className="hidden sm:inline">· reflects unsaved edits</span>
+            </span>
+            {isLive && (
+              <a
+                href={`/${savedPage.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn("inline-flex items-center gap-1 font-semibold text-emerald-700 hover:underline dark:text-emerald-400", focusRing)}
+              >
+                Open /{savedPage.slug} <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto bg-slate-100 p-3 sm:p-5 dark:bg-slate-900">
+            <div className="mx-auto min-h-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-lg shadow-slate-900/5 dark:border-slate-800 dark:bg-slate-950">
+              {blocks.length === 0 ? (
+                <div className="flex min-h-[320px] items-center justify-center p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                  Blocks you add will appear here.
+                </div>
+              ) : (
+                blocks.map((block, i) => <BlockRenderer key={block.id || i} block={block} />)
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <SaveBar
+        dirty={dirty}
+        saving={saving}
+        errorCount={errorCount}
+        onSave={savePage}
+        onDiscard={discard}
+        saveLabel={page.status === "published" ? "Save & publish" : "Save"}
+        savedLabel={isLive ? "Saved · live" : "Saved as " + (savedPage?.status ?? "draft")}
+      />
+    </div>
+  );
+}
+
+function EditorSkeleton() {
+  return (
+    <div className="flex h-[calc(100dvh-4rem)] flex-col" role="status" aria-label="Loading editor">
+      <div className="border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="mt-2 h-3 w-24" />
+      </div>
+      <div className="flex flex-1">
+        <div className="w-full space-y-4 p-5 lg:w-[460px] lg:border-r lg:border-slate-200 dark:lg:border-slate-800">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 w-full rounded-2xl" />
+          ))}
+        </div>
+        <div className="hidden flex-1 p-5 lg:block">
+          <Skeleton className="h-full w-full rounded-2xl" />
         </div>
       </div>
     </div>
@@ -256,252 +524,336 @@ export default function CMSPageEditor({ params }: { params: Promise<{ id: string
 
 function getDefaultContentForBlock(type: string) {
   switch (type) {
-    case 'hero': return { headline: "Amazing New Feature", subheading: "Discover the best way to manage your items online. Fast, secure, and beautiful.", primaryButtonText: "Get Started", primaryButtonLink: "/" };
-    case 'rich-text': return { html: "<h2>Your Heading Here</h2><p>Start typing your paragraph here...</p>" };
-    case 'feature-grid': return { title: "Why Choose Us", features: [{title: "Fast", description: "Lightning fast performance"}, {title: "Secure", description: "Bank-level security"}] };
-    case 'faq': return { title: "Frequently Asked Questions", items: [{question: "How does this work?", answer: "It is very simple..."}] };
-    case 'contact-form': return { title: "Contact Us", subtitle: "We'd love to hear from you." };
-    case 'statistics': return { title: "Our Impact", stats: [{ value: "10", prefix: "", suffix: "k+", label: "Users" }] };
-    case 'testimonials': return { title: "What people say", items: [{ name: "Jane Doe", role: "Customer", story: "Great experience!", avatar: "" }] };
-    case 'team': return { title: "Our Team", members: [{ name: "John Doe", role: "CEO", bio: "Leading the vision." }] };
-    case 'logo-cloud': return { title: "Trusted By", logos: [{ url: "https://via.placeholder.com/150", alt: "Logo" }] };
-    case 'timeline': return { title: "Our History", events: [{ year: "2023", title: "Founded", description: "The beginning." }] };
-    case 'gallery': return { title: "Gallery", images: [{ url: "https://via.placeholder.com/400", caption: "Photo 1" }] };
-    case 'cta': return { headline: "Ready to start?", subheading: "Join us today.", buttonText: "Sign Up", buttonLink: "/" };
+    case "hero": return { headline: "Amazing New Feature", subheading: "Discover the best way to manage your items online. Fast, secure, and beautiful.", primaryButtonText: "Get Started", primaryButtonLink: "/" };
+    case "rich-text": return { html: "<h2>Your Heading Here</h2><p>Start typing your paragraph here...</p>" };
+    case "feature-grid": return { title: "Why Choose Us", features: [{ title: "Fast", description: "Lightning fast performance" }, { title: "Secure", description: "Bank-level security" }] };
+    case "faq": return { title: "Frequently Asked Questions", items: [{ question: "How does this work?", answer: "It is very simple..." }] };
+    case "contact-form": return { title: "Contact Us", subtitle: "We'd love to hear from you." };
+    case "statistics": return { title: "Our Impact", stats: [{ value: "10", prefix: "", suffix: "k+", label: "Users" }] };
+    case "testimonials": return { title: "What people say", items: [{ name: "Jane Doe", role: "Customer", story: "Great experience!", avatar: "" }] };
+    case "team": return { title: "Our Team", members: [{ name: "John Doe", role: "CEO", bio: "Leading the vision." }] };
+    case "logo-cloud": return { title: "Trusted By", logos: [{ url: "https://via.placeholder.com/150", alt: "Logo" }] };
+    case "timeline": return { title: "Our History", events: [{ year: "2023", title: "Founded", description: "The beginning." }] };
+    case "gallery": return { title: "Gallery", images: [{ url: "https://via.placeholder.com/400", caption: "Photo 1" }] };
+    case "cta": return { headline: "Ready to start?", subheading: "Join us today.", buttonText: "Sign Up", buttonLink: "/" };
     default: return {};
   }
 }
 
-function renderBlockEditor(block: any, index: number, updateFn: (idx: number, key: string, val: any) => void) {
-  const content = block.content || {};
-  
-  if (block.type === 'hero') {
-    return (
-      <>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Headline</label>
-          <input type="text" value={content.headline || ""} onChange={e => updateFn(index, 'headline', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Subheading</label>
-          <textarea rows={2} value={content.subheading || ""} onChange={e => updateFn(index, 'subheading', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Primary Button</label>
-            <input type="text" value={content.primaryButtonText || ""} onChange={e => updateFn(index, 'primaryButtonText', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-1" placeholder="Text" />
-            <input type="text" value={content.primaryButtonLink || ""} onChange={e => updateFn(index, 'primaryButtonLink', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" placeholder="URL" />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Secondary Button</label>
-            <input type="text" value={content.secondaryButtonText || ""} onChange={e => updateFn(index, 'secondaryButtonText', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-1" placeholder="Text" />
-            <input type="text" value={content.secondaryButtonLink || ""} onChange={e => updateFn(index, 'secondaryButtonLink', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" placeholder="URL" />
-          </div>
-        </div>
-      </>
-    );
-  }
+// ---------------------------------------------------------------------------
+// Block editors
+// ---------------------------------------------------------------------------
 
-  if (block.type === 'rich-text') {
-    return (
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">HTML Content</label>
-        <TiptapEditor 
-          value={content.html || ""} 
-          onChange={val => updateFn(index, 'html', val)} 
-        />
-      </div>
-    );
-  }
+type FieldSpec = { key: string; label: string; placeholder?: string; multiline?: boolean; wide?: boolean };
 
-  if (block.type === 'faq') {
-    return (
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
-        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
-        <label className="block text-xs text-slate-500 mb-1">Questions</label>
-        {content.items?.map((item: any, i: number) => (
-          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
-            <input type="text" value={item.question} onChange={e => {
-              const newItems = [...content.items];
-              newItems[i].question = e.target.value;
-              updateFn(index, 'items', newItems);
-            }} className="w-full bg-transparent border-b border-slate-100 dark:border-slate-800 mb-1 px-1 py-1 text-sm focus:outline-none" placeholder="Question" />
-            <textarea value={item.answer} onChange={e => {
-              const newItems = [...content.items];
-              newItems[i].answer = e.target.value;
-              updateFn(index, 'items', newItems);
-            }} className="w-full bg-transparent px-1 py-1 text-sm focus:outline-none" placeholder="Answer" rows={2} />
-          </div>
-        ))}
-        <button onClick={() => {
-          const newItems = [...(content.items || []), { question: "New Question", answer: "Answer here" }];
-          updateFn(index, 'items', newItems);
-        }} className="text-xs text-emerald-600 font-medium">+ Add Question</button>
-      </div>
-    );
-  }
-  
-  if (block.type === 'contact-form') {
-    return (
-      <>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Title</label>
-          <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Subtitle</label>
-          <input type="text" value={content.subtitle || ""} onChange={e => updateFn(index, 'subtitle', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Button Text</label>
-          <input type="text" value={content.buttonText || ""} onChange={e => updateFn(index, 'buttonText', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
-        </div>
-      </>
-    );
-  }
-
-  if (block.type === 'statistics') {
-    return (
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
-        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
-        <label className="block text-xs text-slate-500 mb-1">Stats</label>
-        {content.stats?.map((stat: any, i: number) => (
-          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900">
-            <div className="grid grid-cols-3 gap-1 mb-1">
-              <input type="text" value={stat.prefix || ""} onChange={e => { const n = [...content.stats]; n[i].prefix = e.target.value; updateFn(index, 'stats', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Prefix" />
-              <input type="text" value={stat.value || ""} onChange={e => { const n = [...content.stats]; n[i].value = e.target.value; updateFn(index, 'stats', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Value" />
-              <input type="text" value={stat.suffix || ""} onChange={e => { const n = [...content.stats]; n[i].suffix = e.target.value; updateFn(index, 'stats', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Suffix" />
+/** Editable list of objects (FAQ items, stats, team members…). All updates are immutable. */
+function ListEditor({
+  label,
+  items,
+  fields,
+  newItem,
+  itemName,
+  onChange,
+}: {
+  label: string;
+  items: any[] | undefined;
+  fields: FieldSpec[];
+  newItem: Record<string, string>;
+  itemName: string;
+  onChange: (next: any[]) => void;
+}) {
+  const list = Array.isArray(items) ? items : [];
+  const set = (i: number, key: string, value: string) => onChange(list.map((it, j) => (j === i ? { ...it, [key]: value } : it)));
+  const moveItem = (from: number, to: number) => {
+    if (to < 0 || to >= list.length) return;
+    const next = [...list];
+    const [it] = next.splice(from, 1);
+    next.splice(to, 0, it);
+    onChange(next);
+  };
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+        {label} <span className="font-normal text-slate-400">({list.length})</span>
+      </p>
+      <div className="space-y-3">
+        {list.map((item, i) => (
+          <div key={i} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {itemName} {i + 1}
+              </span>
+              <div className="flex items-center">
+                <button type="button" onClick={() => moveItem(i, i - 1)} disabled={i === 0} className={iconButton} aria-label={`Move ${itemName} ${i + 1} up`}>
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveItem(i, i + 1)}
+                  disabled={i === list.length - 1}
+                  className={iconButton}
+                  aria-label={`Move ${itemName} ${i + 1} down`}
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange(list.filter((_, j) => j !== i))}
+                  className={cn(iconButton, "hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400")}
+                  aria-label={`Remove ${itemName} ${i + 1}`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            <input type="text" value={stat.label || ""} onChange={e => { const n = [...content.stats]; n[i].label = e.target.value; updateFn(index, 'stats', n); }} className="w-full bg-transparent border-b border-slate-100 dark:border-slate-800 px-1 py-1 text-sm focus:outline-none" placeholder="Label" />
-            <button onClick={() => { const n = [...content.stats]; n.splice(i, 1); updateFn(index, 'stats', n); }} className="text-xs text-rose-500 mt-1">Remove</button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {fields.map((f) => (
+                <Field key={f.key} label={f.label} className={cn((f.multiline || f.wide) && "sm:col-span-2")}>
+                  {f.multiline ? (
+                    <Textarea rows={2} value={item?.[f.key] ?? ""} onChange={(e) => set(i, f.key, e.target.value)} placeholder={f.placeholder} />
+                  ) : (
+                    <Input value={item?.[f.key] ?? ""} onChange={(e) => set(i, f.key, e.target.value)} placeholder={f.placeholder} />
+                  )}
+                </Field>
+              ))}
+            </div>
           </div>
         ))}
-        <button onClick={() => { const n = [...(content.stats || []), { value: "100", label: "New Stat" }]; updateFn(index, 'stats', n); }} className="text-xs text-emerald-600 font-medium">+ Add Stat</button>
       </div>
-    );
-  }
-
-  if (block.type === 'testimonials') {
-    return (
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
-        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
-        <label className="block text-xs text-slate-500 mb-1">Testimonials</label>
-        {content.items?.map((item: any, i: number) => (
-          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex flex-col gap-1">
-            <input type="text" value={item.name || ""} onChange={e => { const n = [...content.items]; n[i].name = e.target.value; updateFn(index, 'items', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Name" />
-            <input type="text" value={item.role || ""} onChange={e => { const n = [...content.items]; n[i].role = e.target.value; updateFn(index, 'items', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Role" />
-            <textarea value={item.story || ""} onChange={e => { const n = [...content.items]; n[i].story = e.target.value; updateFn(index, 'items', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Story" rows={2} />
-            <input type="text" value={item.avatar || ""} onChange={e => { const n = [...content.items]; n[i].avatar = e.target.value; updateFn(index, 'items', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm focus:outline-none" placeholder="Avatar URL" />
-            <button onClick={() => { const n = [...content.items]; n.splice(i, 1); updateFn(index, 'items', n); }} className="text-xs text-rose-500 self-start">Remove</button>
-          </div>
-        ))}
-        <button onClick={() => { const n = [...(content.items || []), { name: "New Person", story: "Great!" }]; updateFn(index, 'items', n); }} className="text-xs text-emerald-600 font-medium">+ Add Testimonial</button>
-      </div>
-    );
-  }
-
-  if (block.type === 'team') {
-    return (
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
-        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
-        <label className="block text-xs text-slate-500 mb-1">Team Members</label>
-        {content.members?.map((member: any, i: number) => (
-          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex flex-col gap-1">
-            <input type="text" value={member.name || ""} onChange={e => { const n = [...content.members]; n[i].name = e.target.value; updateFn(index, 'members', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Name" />
-            <input type="text" value={member.role || ""} onChange={e => { const n = [...content.members]; n[i].role = e.target.value; updateFn(index, 'members', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Role" />
-            <input type="text" value={member.photo || ""} onChange={e => { const n = [...content.members]; n[i].photo = e.target.value; updateFn(index, 'members', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Photo URL" />
-            <textarea value={member.bio || ""} onChange={e => { const n = [...content.members]; n[i].bio = e.target.value; updateFn(index, 'members', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Bio" />
-            <button onClick={() => { const n = [...content.members]; n.splice(i, 1); updateFn(index, 'members', n); }} className="text-xs text-rose-500 self-start">Remove</button>
-          </div>
-        ))}
-        <button onClick={() => { const n = [...(content.members || []), { name: "Name" }]; updateFn(index, 'members', n); }} className="text-xs text-emerald-600 font-medium">+ Add Member</button>
-      </div>
-    );
-  }
-
-  if (block.type === 'logo-cloud') {
-    return (
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
-        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
-        <label className="block text-xs text-slate-500 mb-1">Logos</label>
-        {content.logos?.map((logo: any, i: number) => (
-          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex gap-2 items-center">
-            <input type="text" value={logo.url || ""} onChange={e => { const n = [...content.logos]; n[i].url = e.target.value; updateFn(index, 'logos', n); }} className="flex-1 bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Image URL" />
-            <button onClick={() => { const n = [...content.logos]; n.splice(i, 1); updateFn(index, 'logos', n); }} className="text-xs text-rose-500">Remove</button>
-          </div>
-        ))}
-        <button onClick={() => { const n = [...(content.logos || []), { url: "" }]; updateFn(index, 'logos', n); }} className="text-xs text-emerald-600 font-medium">+ Add Logo</button>
-      </div>
-    );
-  }
-
-  if (block.type === 'timeline') {
-    return (
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
-        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
-        <label className="block text-xs text-slate-500 mb-1">Events</label>
-        {content.events?.map((event: any, i: number) => (
-          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex flex-col gap-1">
-            <input type="text" value={event.year || ""} onChange={e => { const n = [...content.events]; n[i].year = e.target.value; updateFn(index, 'events', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Year / Date" />
-            <input type="text" value={event.title || ""} onChange={e => { const n = [...content.events]; n[i].title = e.target.value; updateFn(index, 'events', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Title" />
-            <textarea value={event.description || ""} onChange={e => { const n = [...content.events]; n[i].description = e.target.value; updateFn(index, 'events', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Description" />
-            <button onClick={() => { const n = [...content.events]; n.splice(i, 1); updateFn(index, 'events', n); }} className="text-xs text-rose-500 self-start">Remove</button>
-          </div>
-        ))}
-        <button onClick={() => { const n = [...(content.events || []), { year: "2024", title: "New Event" }]; updateFn(index, 'events', n); }} className="text-xs text-emerald-600 font-medium">+ Add Event</button>
-      </div>
-    );
-  }
-
-  if (block.type === 'gallery') {
-    return (
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">Section Title</label>
-        <input type="text" value={content.title || ""} onChange={e => updateFn(index, 'title', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-3" />
-        <label className="block text-xs text-slate-500 mb-1">Images</label>
-        {content.images?.map((img: any, i: number) => (
-          <div key={i} className="mb-2 p-2 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 flex flex-col gap-1">
-            <input type="text" value={img.url || ""} onChange={e => { const n = [...content.images]; n[i].url = e.target.value; updateFn(index, 'images', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Image URL" />
-            <input type="text" value={img.caption || ""} onChange={e => { const n = [...content.images]; n[i].caption = e.target.value; updateFn(index, 'images', n); }} className="w-full bg-transparent border border-slate-100 dark:border-slate-800 rounded px-1 py-1 text-sm" placeholder="Caption (optional)" />
-            <button onClick={() => { const n = [...content.images]; n.splice(i, 1); updateFn(index, 'images', n); }} className="text-xs text-rose-500 self-start">Remove</button>
-          </div>
-        ))}
-        <button onClick={() => { const n = [...(content.images || []), { url: "" }]; updateFn(index, 'images', n); }} className="text-xs text-emerald-600 font-medium">+ Add Image</button>
-      </div>
-    );
-  }
-
-  if (block.type === 'cta') {
-    return (
-      <>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Headline</label>
-          <input type="text" value={content.headline || ""} onChange={e => updateFn(index, 'headline', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Subheading</label>
-          <input type="text" value={content.subheading || ""} onChange={e => updateFn(index, 'subheading', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Button Text</label>
-            <input type="text" value={content.buttonText || ""} onChange={e => updateFn(index, 'buttonText', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm mb-1" />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Button Link</label>
-            <input type="text" value={content.buttonLink || ""} onChange={e => updateFn(index, 'buttonLink', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-3 py-1.5 text-sm" />
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  return <div className="text-sm text-slate-500">Edit options not available for this block yet.</div>;
+      <button
+        type="button"
+        onClick={() => onChange([...list, { ...newItem }])}
+        className={cn(
+          "mt-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10",
+          focusRing
+        )}
+      >
+        + Add {itemName.toLowerCase()}
+      </button>
+    </div>
+  );
 }
 
+function TextField({ label, value, onChange, placeholder, multiline }: { label: string; value: unknown; onChange: (v: string) => void; placeholder?: string; multiline?: boolean }) {
+  return (
+    <Field label={label}>
+      {multiline ? (
+        <Textarea rows={2} value={typeof value === "string" ? value : ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      ) : (
+        <Input value={typeof value === "string" ? value : ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      )}
+    </Field>
+  );
+}
+
+function Pair({ children }: { children: ReactNode }) {
+  return <div className="grid gap-3 sm:grid-cols-2">{children}</div>;
+}
+
+function renderBlockEditor(block: any, index: number, updateFn: (idx: number, key: string, val: any) => void) {
+  const content = block.content || {};
+  const set = (key: string) => (v: any) => updateFn(index, key, v);
+
+  switch (block.type) {
+    case "hero":
+      return (
+        <>
+          <TextField label="Headline" value={content.headline} onChange={set("headline")} />
+          <TextField label="Subheading" value={content.subheading} onChange={set("subheading")} multiline />
+          <Pair>
+            <TextField label="Primary button text" value={content.primaryButtonText} onChange={set("primaryButtonText")} placeholder="Get started" />
+            <TextField label="Primary button link" value={content.primaryButtonLink} onChange={set("primaryButtonLink")} placeholder="/" />
+            <TextField label="Secondary button text" value={content.secondaryButtonText} onChange={set("secondaryButtonText")} />
+            <TextField label="Secondary button link" value={content.secondaryButtonLink} onChange={set("secondaryButtonLink")} />
+          </Pair>
+          <TextField label="Background image URL (optional)" value={content.backgroundImage} onChange={set("backgroundImage")} placeholder="/uploads/…" />
+        </>
+      );
+
+    case "rich-text":
+      return (
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">Content</p>
+          <TiptapEditor value={content.html || ""} onChange={set("html")} />
+        </div>
+      );
+
+    case "feature-grid":
+      return (
+        <>
+          <TextField label="Section title" value={content.title} onChange={set("title")} />
+          <ListEditor
+            label="Features"
+            itemName="Feature"
+            items={content.features}
+            onChange={set("features")}
+            newItem={{ title: "New feature", description: "" }}
+            fields={[
+              { key: "title", label: "Title", wide: true },
+              { key: "description", label: "Description", multiline: true },
+            ]}
+          />
+        </>
+      );
+
+    case "faq":
+      return (
+        <>
+          <TextField label="Section title" value={content.title} onChange={set("title")} />
+          <ListEditor
+            label="Questions"
+            itemName="Question"
+            items={content.items}
+            onChange={set("items")}
+            newItem={{ question: "New question", answer: "Answer here" }}
+            fields={[
+              { key: "question", label: "Question", wide: true },
+              { key: "answer", label: "Answer", multiline: true },
+            ]}
+          />
+        </>
+      );
+
+    case "contact-form":
+      return (
+        <>
+          <TextField label="Title" value={content.title} onChange={set("title")} />
+          <TextField label="Subtitle" value={content.subtitle} onChange={set("subtitle")} />
+          <TextField label="Button text" value={content.buttonText} onChange={set("buttonText")} placeholder="Submit message" />
+        </>
+      );
+
+    case "statistics":
+      return (
+        <>
+          <TextField label="Section title" value={content.title} onChange={set("title")} />
+          <ListEditor
+            label="Stats"
+            itemName="Stat"
+            items={content.stats}
+            onChange={set("stats")}
+            newItem={{ value: "100", label: "New stat" }}
+            fields={[
+              { key: "value", label: "Value", placeholder: "10" },
+              { key: "label", label: "Label", placeholder: "Users" },
+              { key: "prefix", label: "Prefix", placeholder: "$" },
+              { key: "suffix", label: "Suffix", placeholder: "k+" },
+            ]}
+          />
+        </>
+      );
+
+    case "testimonials":
+      return (
+        <>
+          <TextField label="Section title" value={content.title} onChange={set("title")} />
+          <ListEditor
+            label="Testimonials"
+            itemName="Testimonial"
+            items={content.items}
+            onChange={set("items")}
+            newItem={{ name: "New person", story: "Great!" }}
+            fields={[
+              { key: "name", label: "Name" },
+              { key: "role", label: "Role" },
+              { key: "story", label: "Story", multiline: true },
+              { key: "avatar", label: "Avatar URL", wide: true },
+            ]}
+          />
+        </>
+      );
+
+    case "team":
+      return (
+        <>
+          <TextField label="Section title" value={content.title} onChange={set("title")} />
+          <ListEditor
+            label="Team members"
+            itemName="Member"
+            items={content.members}
+            onChange={set("members")}
+            newItem={{ name: "Name" }}
+            fields={[
+              { key: "name", label: "Name" },
+              { key: "role", label: "Role" },
+              { key: "photo", label: "Photo URL", wide: true },
+              { key: "bio", label: "Bio", multiline: true },
+            ]}
+          />
+        </>
+      );
+
+    case "logo-cloud":
+      return (
+        <>
+          <TextField label="Section title" value={content.title} onChange={set("title")} />
+          <ListEditor
+            label="Logos"
+            itemName="Logo"
+            items={content.logos}
+            onChange={set("logos")}
+            newItem={{ url: "" }}
+            fields={[
+              { key: "url", label: "Image URL" },
+              { key: "alt", label: "Company name" },
+            ]}
+          />
+        </>
+      );
+
+    case "timeline":
+      return (
+        <>
+          <TextField label="Section title" value={content.title} onChange={set("title")} />
+          <ListEditor
+            label="Events"
+            itemName="Event"
+            items={content.events}
+            onChange={set("events")}
+            newItem={{ year: String(new Date().getFullYear()), title: "New event" }}
+            fields={[
+              { key: "year", label: "Year / date" },
+              { key: "title", label: "Title" },
+              { key: "description", label: "Description", multiline: true },
+            ]}
+          />
+        </>
+      );
+
+    case "gallery":
+      return (
+        <>
+          <TextField label="Section title" value={content.title} onChange={set("title")} />
+          <ListEditor
+            label="Images"
+            itemName="Image"
+            items={content.images}
+            onChange={set("images")}
+            newItem={{ url: "" }}
+            fields={[
+              { key: "url", label: "Image URL" },
+              { key: "caption", label: "Caption (optional)" },
+            ]}
+          />
+        </>
+      );
+
+    case "cta":
+      return (
+        <>
+          <TextField label="Headline" value={content.headline} onChange={set("headline")} />
+          <TextField label="Subheading" value={content.subheading} onChange={set("subheading")} />
+          <Pair>
+            <TextField label="Button text" value={content.buttonText} onChange={set("buttonText")} />
+            <TextField label="Button link" value={content.buttonLink} onChange={set("buttonLink")} placeholder="/" />
+          </Pair>
+        </>
+      );
+
+    case "divider":
+      return <p className="text-sm text-slate-500 dark:text-slate-400">A thin line that separates the blocks above and below. Nothing to set.</p>;
+
+    default:
+      return <p className="text-sm text-slate-500 dark:text-slate-400">This block type has no editable options yet.</p>;
+  }
+}

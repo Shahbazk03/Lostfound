@@ -1,21 +1,100 @@
 @import "tailwindcss";
 @custom-variant dark (&:is(.dark *));
 
-@theme {
-  --animate-marquee: marquee 25s linear infinite;
+/* Inter comes from next/font in app/layout.tsx (exposed as --font-inter);
+   `font-sans` and the page default use it, with system fonts as fallback. */
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
 
-  @keyframes marquee {
-    0% { transform: translateX(100%); }
-    100% { transform: translateX(-100%); }
+@theme {
+  /* Custom CMS hero illustration (option: float | pulse | bounce | none) */
+  --animate-hero-float: hero-float 6s ease-in-out infinite;
+  --animate-hero-pulse: hero-pulse 6s ease-in-out infinite;
+  --animate-hero-bounce: hero-bounce 6s ease-in-out infinite;
+
+  @keyframes hero-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-14px); }
+  }
+
+  @keyframes hero-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.03); opacity: 0.9; }
+  }
+
+  @keyframes hero-bounce {
+    0%, 100% { transform: translateY(0); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
+    50% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
+  }
+
+  /* Content swaps (match visual, how-it-works panels) */
+  --animate-fade-up: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* Hero match visual: dashes flowing along the connector, and a dot travelling down it */
+  --animate-dash-flow: dash-flow 1.2s linear infinite;
+  --animate-travel-down: travel-down 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+
+  @keyframes dash-flow {
+    to { stroke-dashoffset: -16; }
+  }
+
+  @keyframes travel-down {
+    0% { transform: translateY(0); opacity: 0; }
+    15%, 85% { opacity: 1; }
+    100% { transform: translateY(var(--travel, 72px)); opacity: 0; }
+  }
+
+  /* Route-change progress bar (app/loading.tsx) */
+  --animate-progress: progress 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+
+  @keyframes progress {
+    0% { transform: translateX(-100%) scaleX(0.4); }
+    60% { transform: translateX(40%) scaleX(0.6); }
+    100% { transform: translateX(120%) scaleX(0.3); }
   }
 }
 
-/* Hide scrollbar globally but allow scrolling */
-::-webkit-scrollbar {
+/* Page scrollbar: thin and themed (next-themes sets color-scheme on <html>).
+   Nested scroll areas such as chip rows keep their scrollbars hidden. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.55) transparent;
+  /* Anchor targets (#how-it-works, legal sections) clear the sticky navbar. */
+  scroll-padding-top: 5rem;
+}
+:where(body *) {
+  scrollbar-width: none;
+}
+:where(body *)::-webkit-scrollbar {
   display: none;
 }
 
-html, body {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+::selection {
+  background-color: var(--color-emerald-500, #10b981);
+  color: #ffffff;
+}
+
+/* <details> accordions: hide the default disclosure marker (we draw our own). */
+summary::-webkit-details-marker {
+  display: none;
+}
+
+/* ScrollReveal (src/components/animations/ScrollReveal.tsx).
+   Hidden state only applies when JS runs and motion is welcome, so content is
+   always visible to crawlers, no-JS visitors and reduced-motion users. */
+[data-reveal] {
+  transition-property: opacity, transform;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  [data-reveal]:not([data-revealed]) { opacity: 0; }
+  [data-reveal="fade-up"]:not([data-revealed]) { transform: translateY(24px); }
+  [data-reveal="slide-in"]:not([data-revealed]) { transform: translateX(-24px); }
+  [data-reveal="scale-up"]:not([data-revealed]) { transform: scale(0.96); }
 }

@@ -1,469 +1,579 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- item photos and avatars can be data: URLs or /api/media URLs */
 
-import { LoadingLogo } from "@/components/LoadingLogo";
-import { useState, useEffect, useRef } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
-  AlertCircle,
-  Send,
   ArrowLeft,
-  User,
-  Lock,
-  Search,
-  MoreVertical,
+  ArrowUpRight,
   Check,
-  CheckCheck,
-  Settings,
-  LogOut,
-  LayoutDashboard
+  Inbox,
+  MessagesSquare,
+  Package,
+  RotateCcw,
+  Search,
+  Send,
+  X,
 } from "lucide-react";
-import { formatDateTime } from "@/lib/utils";
-import Background3D from "@/components/Background3D";
+import { cn, formatDayLabel, formatShortTimestamp, getInitials } from "@/lib/utils";
+import { Alert } from "@/components/ui/Alert";
+import { SignInRequired } from "@/components/ui/SignInRequired";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Spinner } from "@/components/ui/Spinner";
+import { ui } from "@/components/ui/styles";
+import {
+  groupConversations,
+  isUnread,
+  markSeen,
+  readSeen,
+  type Conversation,
+  type InboxMessage,
+} from "./inbox";
 
-interface Message {
-  id: number;
-  content: string;
-  read: boolean;
-  createdAt: string;
-  senderId: number;
-  receiverId: number;
-  itemId: number;
-  itemTitle: string | null;
-  itemPhoto?: string | null;
-  otherUserId?: number;
-  otherUserName?: string | null;
-  otherUserAvatar?: string | null;
-  isLocked?: boolean;
+const MAX_LENGTH = 2000;
+/** Messages from the same person within this window are drawn as one group. */
+const GROUP_GAP_MS = 5 * 60 * 1000;
+/** Re-check for new messages when the tab regains focus, at most this often. */
+const REFRESH_ON_FOCUS_MS = 15 * 1000;
+
+function Avatar({ name, src, className }: { name: string | null; src: string | null; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-50 font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+        className
+      )}
+      aria-hidden="true"
+    >
+      {src ? <img src={src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" /> : getInitials(name)}
+    </span>
+  );
+}
+
+function ItemThumb({ src, className }: { src: string | null; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-400 ring-1 ring-inset ring-slate-900/5 dark:bg-slate-800 dark:text-slate-500 dark:ring-white/5",
+        className
+      )}
+      aria-hidden="true"
+    >
+      {src ? <img src={src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <Package className="h-5 w-5" />}
+    </span>
+  );
 }
 
 export default function MessagesPage() {
-  const { user, logout } = useAuth();
-  const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [sendError, setSendError] = useState("");
   const [replyContent, setReplyContent] = useState("");
   const [sending, setSending] = useState(false);
-  const [unlockingMessageId, setUnlockingMessageId] = useState<number | null>(null);
-  const [unlockedMessages, setUnlockedMessages] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
-  const [isSidebarMenuOpen, setIsSidebarMenuOpen] = useState(false);
-  const sidebarMenuRef = useRef<HTMLDivElement>(null);
+  const [seen, setSeen] = useState<Record<string, number>>({});
+  const threadRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const lastFetchAt = useRef(0);
+  const lastScrolled = useRef<{ key: string | null; count: number }>({ key: null, count: 0 });
+  const userId = user?.id;
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (sidebarMenuRef.current && !sidebarMenuRef.current.contains(event.target as Node)) {
-        setIsSidebarMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
+    lastFetchAt.current = Date.now();
     try {
-      const res = await fetch("/api/messages");
+      const res = await fetch("/api/messages", { cache: "no-store" });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load messages");
       setMessages(data.messages || []);
+      setLoadError(false);
     } catch {
-      setMessages([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    // Data fetch + reading per-browser "seen" state; state is set after the request resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeen(readSeen(userId));
+    fetchMessages();
+  }, [userId, fetchMessages]);
+
+  // No background polling: pick up new messages when the user comes back to
+  // the tab (and only if the last fetch is a little stale).
+  useEffect(() => {
+    if (!userId) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchAt.current < REFRESH_ON_FOCUS_MS) return;
+      fetchMessages();
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [userId, fetchMessages]);
+
+  const conversations = useMemo<Conversation[]>(
+    () => (userId ? groupConversations(messages, userId) : []),
+    [messages, userId]
+  );
+
+  const query = searchQuery.trim().toLowerCase();
+  const filteredConversations = query
+    ? conversations.filter((c) =>
+        `${c.itemTitle ?? ""} ${c.otherUserName ?? ""} ${c.latest.content}`.toLowerCase().includes(query)
+      )
+    : conversations;
+
+  const selectedConversation = selectedKey
+    ? conversations.find((c) => c.key === selectedKey) ?? null
+    : null;
+
+  const unreadCount = userId ? conversations.filter((c) => isUnread(c, userId, seen)).length : 0;
+
+  // Opening a thread (or a new message arriving in it) marks it as seen.
+  useEffect(() => {
+    if (!userId || !selectedConversation) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeen(markSeen(userId, selectedConversation));
+  }, [userId, selectedConversation]);
+
+  // Jump to the newest message when a thread opens; glide when one arrives.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el || !selectedConversation) return;
+    const { key, messages: list } = selectedConversation;
+    const sameThread = lastScrolled.current.key === key;
+    if (sameThread && lastScrolled.current.count === list.length) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: sameThread ? "smooth" : "auto" });
+    lastScrolled.current = { key, count: list.length };
+  }, [selectedConversation]);
+
+  const openConversation = (key: string) => {
+    setSelectedKey(key);
+    setSendError("");
+    setReplyContent("");
+    if (composerRef.current) composerRef.current.style.height = "";
   };
 
-  useEffect(() => {
-    if (!user) return;
-    fetchMessages();
-  }, [user]);
-
-  // Auto-scroll to bottom of chat when messages change
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, selectedItemId]);
-
-  const groupedMessages = messages.reduce((acc, msg) => {
-    const key = `${msg.itemId}-${
-      msg.senderId === user?.id ? msg.receiverId : msg.senderId
-    }`;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(msg);
-    return acc;
-  }, {} as Record<string, Message[]>);
-
-  const filteredGroups = Object.entries(groupedMessages).filter(([_, msgs]) => {
-    const lastMsg = msgs[msgs.length - 1];
-    const searchStr = `${lastMsg.itemTitle} ${lastMsg.otherUserName}`.toLowerCase();
-    return searchStr.includes(searchQuery.toLowerCase());
-  });
+  const resizeComposer = () => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  };
 
   const handleSendReply = async () => {
-    if (!replyContent.trim() || !selectedItemId || !user) return;
-    const conversation = groupedMessages[Object.keys(groupedMessages).find((k) =>
-      k.startsWith(`${selectedItemId}-`)
-    ) || ""];
-    if (!conversation) return;
-
-    const otherUserId = conversation[0].senderId === user.id
-      ? conversation[0].receiverId
-      : conversation[0].senderId;
+    if (!replyContent.trim() || !selectedConversation || !user || sending) return;
 
     setSending(true);
+    setSendError("");
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          receiverId: otherUserId,
-          itemId: selectedItemId,
+          receiverId: selectedConversation.otherUserId,
+          itemId: selectedConversation.itemId,
           content: replyContent.trim(),
         }),
       });
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
         setReplyContent("");
-        fetchMessages();
+        if (composerRef.current) composerRef.current.style.height = "";
+        if (data.message?.id) {
+          // Show it straight away; the thread fills in item/user details.
+          const created = data.message as InboxMessage;
+          setMessages((prev) => [
+            ...prev,
+            { ...created, createdAt: String(created.createdAt), otherUserId: selectedConversation.otherUserId },
+          ]);
+        } else {
+          fetchMessages();
+        }
+        composerRef.current?.focus();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setSendError(data.error || "Message could not be sent.");
       }
     } catch {
-      // ignore
+      setSendError("Message could not be sent. Check your connection.");
     } finally {
       setSending(false);
     }
   };
 
-  const handleUnlockMessage = async (messageId: number) => {
-    if (!user) return;
-    
-    setUnlockingMessageId(messageId);
-    try {
-      const res = await fetch("/api/messages/unlock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messageId: messageId,
-        }),
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data.sessionUrl) {
-          window.location.assign(data.sessionUrl);
-        }
-      }
-    } catch (error) {
-      console.error("Error unlocking message:", error);
-    } finally {
-      setUnlockingMessageId(null);
-    }
-  };
-
-  if (!user) {
+  if (authLoading) {
     return (
-      <div className="h-[calc(100vh-64px)] flex items-center justify-center relative">
-        <Background3D />
-        <div className="text-center bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl p-10 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 relative z-10">
-          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white mb-2">
-            Sign in required
-          </h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-6">You must be logged in to view your messages.</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="bg-emerald-600 text-slate-900 dark:text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-[0_0_15px_rgba(16,185,129,0.5)]"
-          >
-            Sign In
-          </button>
+      <div className="h-[calc(100dvh-64px)] bg-slate-50 dark:bg-slate-950" role="status" aria-label="Loading messages">
+        <div className="mx-auto flex h-full max-w-[1600px] md:px-6 md:py-6 lg:px-8">
+          <Skeleton className="h-full w-full md:rounded-2xl" />
         </div>
       </div>
     );
   }
 
-  const selectedConversationKey = Object.keys(groupedMessages).find((k) =>
-    k.startsWith(`${selectedItemId}-`)
-  ) || "";
-  const selectedConversation = selectedItemId ? groupedMessages[selectedConversationKey] : null;
+  if (!user) {
+    return (
+      <SignInRequired
+        icon={MessagesSquare}
+        title="Sign in to see your messages"
+        description="Conversations about your listings, and items you've reached out about, live here."
+        next="/messages"
+      />
+    );
+  }
 
-  return (
-    <div className="h-[calc(100vh-64px)] relative flex overflow-hidden">
-      <Background3D />
-      
-      {/* Sidebar - Conversation List */}
-      <div className={`${selectedItemId ? 'hidden md:flex' : 'flex'} w-full md:w-[380px] lg:w-[420px] flex-col bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800/50 shrink-0 relative z-10`}>
-        {/* Sidebar Header */}
-        <div className="h-[60px] bg-white/60 dark:bg-slate-900/40 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800/50 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-slate-900 dark:text-white font-bold shadow-lg shadow-emerald-500/20 overflow-hidden">
-              {user.avatar ? (
-                <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                user.name ? user.name.charAt(0).toUpperCase() : "U"
-              )}
-            </div>
-            <h1 className="font-bold text-slate-900 dark:text-white text-lg">Chats</h1>
-          </div>
-          <div className="relative" ref={sidebarMenuRef}>
-            <button 
-              onClick={() => setIsSidebarMenuOpen(!isSidebarMenuOpen)}
-              className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+  const listPane = (
+    <aside
+      aria-label="Conversations"
+      className={cn(
+        "min-h-0 w-full flex-col border-slate-200/80 dark:border-slate-800 md:flex md:w-[340px] md:border-r lg:w-[380px]",
+        selectedConversation ? "hidden" : "flex"
+      )}
+    >
+      <div className="shrink-0 px-4 pb-3 pt-4 sm:px-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Messages</h1>
+          {unreadCount > 0 && (
+            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{unreadCount} unread</span>
+          )}
+        </div>
+        <div className="relative mt-3">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+          <input
+            type="search"
+            placeholder="Search people, items or messages"
+            aria-label="Search conversations"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={cn(ui.input, "h-10 bg-slate-50 pl-10 pr-9 shadow-none dark:bg-slate-800/60 [&::-webkit-search-cancel-button]:hidden")}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+              className="absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200/60 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
             >
-              <MoreVertical className="w-5 h-5" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
-
-            {/* Dropdown Menu */}
-            {isSidebarMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50 overflow-hidden transform origin-top-right transition-all animate-in fade-in zoom-in-95 duration-200">
-                <Link 
-                  href="/profile"
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-                  onClick={() => setIsSidebarMenuOpen(false)}
-                >
-                  <User className="w-4 h-4" />
-                  Profile
-                </Link>
-                <Link 
-                  href="/dashboard"
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-                  onClick={() => setIsSidebarMenuOpen(false)}
-                >
-                  <LayoutDashboard className="w-4 h-4" />
-                  Dashboard
-                </Link>
-                <div className="h-px bg-slate-200 dark:bg-slate-700 my-1 mx-2" />
-                <button 
-                  onClick={() => {
-                    setIsSidebarMenuOpen(false);
-                    logout();
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Log Out
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Search Bar */}
-        <div className="p-3 bg-white/60 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-800/50 shrink-0">
-          <div className="relative flex items-center bg-slate-100/50 dark:bg-slate-800/50 rounded-lg px-4 py-2 border border-slate-200 dark:border-slate-700/50">
-            <Search className="w-4 h-4 text-slate-600 dark:text-slate-400 mr-3" />
-            <input 
-              type="text" 
-              placeholder="Search or start new chat" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent border-none outline-none text-sm w-full text-slate-900 dark:text-white placeholder:text-slate-500"
-            />
-          </div>
-        </div>
-
-        {/* Chat List */}
-        <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <LoadingLogo className="w-8 h-8 text-emerald-500 animate-spin" />
-            </div>
-          ) : filteredGroups.length === 0 ? (
-            <div className="text-center py-10 px-4 text-slate-500 text-sm">
-              No conversations found.
-            </div>
-          ) : (
-            filteredGroups.map(([key, msgs]) => {
-              const lastMsg = msgs[msgs.length - 1];
-              const isSelected = selectedItemId === lastMsg.itemId;
-              const isMeLast = lastMsg.senderId === user.id;
-              
-              return (
-                <button
-                  key={key}
-                  onClick={() => setSelectedItemId(lastMsg.itemId)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-100/50 dark:bg-slate-800/50 transition-colors border-b border-slate-200 dark:border-slate-800/30 ${
-                    isSelected ? "bg-slate-100 dark:bg-slate-800/80" : ""
-                  }`}
-                >
-                  <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/20 overflow-hidden relative">
-                    {lastMsg.otherUserAvatar ? (
-                      <img src={lastMsg.otherUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold text-lg">
-                        {lastMsg.otherUserName ? lastMsg.otherUserName.charAt(0).toUpperCase() : "U"}
-                      </span>
-                    )}
-                    {lastMsg.itemPhoto && (
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-slate-200">
-                        <img src={lastMsg.itemPhoto} alt="Item" className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 flex flex-col justify-center text-left">
-                    <div className="flex justify-between items-baseline mb-1">
-                      <h2 className="font-semibold text-slate-900 dark:text-white truncate pr-2">
-                        {lastMsg.otherUserName || "Unknown User"}
-                      </h2>
-                      <span className="text-xs text-slate-600 dark:text-slate-400 shrink-0">
-                        {new Date(lastMsg.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
-                    <div className="text-xs text-emerald-600 dark:text-emerald-400 truncate mb-0.5">
-                      {lastMsg.itemTitle || "Unknown Item"}
-                    </div>
-                    <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 truncate">
-                      {isMeLast && <CheckCheck className="w-4 h-4 text-emerald-500 shrink-0" />}
-                      <span className="truncate">{lastMsg.content}</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })
           )}
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className={`${!selectedItemId ? 'hidden md:flex' : 'flex'} flex-1 flex-col relative z-10 bg-white/60 dark:bg-slate-900/40 backdrop-blur-sm`}>
-        {selectedConversation ? (
-          <>
-            {/* Chat Header */}
-            <div className="h-[60px] bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800/50 shrink-0 z-10 shadow-sm">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setSelectedItemId(null)}
-                  className="md:hidden text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white p-1 -ml-2"
-                >
-                  <ArrowLeft className="w-6 h-6" />
-                </button>
-                <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20 overflow-hidden">
-                  {selectedConversation[0].otherUserAvatar ? (
-                    <img src={selectedConversation[0].otherUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                      {selectedConversation[0].otherUserName ? selectedConversation[0].otherUserName.charAt(0).toUpperCase() : "U"}
-                    </span>
-                  )}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
+        {loading ? (
+          <ul aria-hidden="true">
+            {Array.from({ length: 6 }, (_, i) => (
+              <li key={i} className="flex items-center gap-3 px-3 py-3">
+                <Skeleton className="h-12 w-12 rounded-xl" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3.5 w-1/2" />
+                  <Skeleton className="h-3 w-3/4" />
                 </div>
-                <div className="flex flex-col">
-                  <span className="font-semibold text-slate-900 dark:text-white leading-tight">
-                    {selectedConversation[0].otherUserName || "Unknown User"}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-slate-500">
-                      {selectedConversation[0].itemTitle || "Unknown Item"}
-                    </span>
-                    <span className="text-xs text-slate-300 dark:text-slate-700">•</span>
-                    <Link
-                      href={`/items/${selectedConversation[0].itemId}`}
-                      className="text-xs text-emerald-500 hover:text-emerald-400 hover:underline leading-tight"
-                    >
-                      View Item Details
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              <button className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white p-2"><MoreVertical className="w-5 h-5" /></button>
-            </div>
-
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col gap-3 z-10">
-              {/* Note: groupedMessages are sorted newest first, so we reverse to show chronological order top-to-bottom */}
-              {[...selectedConversation].reverse().map((msg) => {
-                const isMe = msg.senderId === user.id;
-                const isUnlocked = !msg.isLocked || unlockedMessages.has(msg.id);
-                
-                return (
-                  <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                    {msg.isLocked && !isUnlocked ? (
-                      <div className={`max-w-[85%] md:max-w-[65%] px-3 py-2 rounded-lg shadow-md text-[15px] leading-relaxed relative ${isMe ? "bg-emerald-600 text-slate-900 dark:text-white rounded-tr-none shadow-emerald-600/20" : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700/50 rounded-tl-none shadow-black/20"}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Lock className={`w-4 h-4 ${isMe ? "text-emerald-200" : "text-emerald-400"}`} />
-                          <span className={`font-semibold text-sm ${isMe ? "text-emerald-100" : "text-emerald-400"}`}>Message locked</span>
-                        </div>
-                        <p className={`text-xs mb-2 ${isMe ? "text-emerald-100" : "text-slate-600 dark:text-slate-400"}`}>
-                          Unlock for $1 to view this message securely.
-                        </p>
-                        {!isMe && (
-                          <button
-                            onClick={() => handleUnlockMessage(msg.id)}
-                            disabled={unlockingMessageId === msg.id}
-                            className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 disabled:opacity-50 px-3 py-2 rounded text-sm font-bold transition-colors flex items-center gap-2 justify-center shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                          >
-                            {unlockingMessageId === msg.id ? (
-                              <><LoadingLogo className="w-4 h-4 animate-spin text-slate-900" /> Processing...</>
-                            ) : (
-                              <><Lock className="w-4 h-4" /> Unlock for $1</>
-                            )}
-                          </button>
-                        )}
-                        <div className={`text-[11px] text-right mt-1.5 flex justify-end items-center gap-1 ${isMe ? "text-emerald-200" : "text-slate-500"}`}>
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          {isMe && <CheckCheck className="w-3.5 h-3.5 text-emerald-300" />}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={`max-w-[85%] md:max-w-[65%] px-3 py-2 rounded-lg shadow-md text-[15px] leading-relaxed relative ${isMe ? "bg-emerald-600 text-slate-900 dark:text-white rounded-tr-none shadow-emerald-600/20" : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700/50 rounded-tl-none shadow-black/20"}`}>
-                        <div className="break-words">{msg.content}</div>
-                        <div className={`text-[11px] text-right mt-1 flex justify-end items-center gap-1 min-w-[60px] ${isMe ? "text-emerald-200" : "text-slate-500"}`}>
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          {isMe && <CheckCheck className={`w-3.5 h-3.5 ${msg.read ? 'text-slate-900 dark:text-white' : 'text-emerald-300'}`} />}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Chat Input */}
-            <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl p-3 flex items-end gap-3 z-10 shrink-0 border-t border-slate-200 dark:border-slate-800/50">
-              <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden shadow-inner border border-slate-200 dark:border-slate-700/50 flex items-end min-h-[44px]">
-                <textarea
-                  value={replyContent}
-                  onChange={(e) => setReplyContent(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendReply();
-                    }
-                  }}
-                  placeholder="Type a message"
-                  className="w-full max-h-[120px] px-4 py-3 outline-none text-slate-900 dark:text-white placeholder-slate-400 resize-none bg-transparent block"
-                  rows={1}
-                  style={{ minHeight: '44px' }}
-                />
-              </div>
-              <button
-                onClick={handleSendReply}
-                disabled={!replyContent.trim() || sending}
-                className="w-[44px] h-[44px] rounded-full bg-emerald-600 text-slate-900 dark:text-white flex items-center justify-center shrink-0 disabled:opacity-50 hover:bg-emerald-500 transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-              >
-                {sending ? (
-                  <LoadingLogo className="w-5 h-5 animate-spin text-slate-900 dark:text-white" />
-                ) : (
-                  <Send className="w-5 h-5 ml-1" />
-                )}
-              </button>
-            </div>
-          </>
+              </li>
+            ))}
+          </ul>
+        ) : loadError && conversations.length === 0 ? (
+          <div className="px-3 py-10 text-center">
+            <p className="text-sm font-medium text-slate-900 dark:text-white">Couldn&apos;t load your messages</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                fetchMessages();
+              }}
+              className={cn(ui.btnSecondary, "mt-4")}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="flex flex-col items-center px-6 py-14 text-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/20">
+              <Inbox className="h-7 w-7" aria-hidden="true" />
+            </span>
+            <p className="mt-4 font-semibold text-slate-900 dark:text-white">No messages yet</p>
+            <p className="mt-1 max-w-xs text-sm leading-6 text-slate-500 dark:text-slate-400">
+              When you contact someone about a listing, or they contact you, the conversation shows up here.
+            </p>
+            <Link href="/browse" className={cn(ui.btnPrimary, "mt-6")}>
+              Browse listings
+            </Link>
+          </div>
+        ) : filteredConversations.length === 0 ? (
+          <p className="px-3 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+            No conversations match &ldquo;{searchQuery.trim()}&rdquo;.
+          </p>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center z-10 bg-white/60 dark:bg-slate-900/40 border-l border-slate-200 dark:border-slate-800/50">
-            <div className="w-80 text-center">
-              <div className="w-32 h-32 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl border border-slate-200 dark:border-slate-700/50">
-                <Search className="w-12 h-12 text-emerald-400" />
+          <ul className="space-y-0.5">
+            {filteredConversations.map((conversation) => {
+              const lastMsg = conversation.latest;
+              const isSelected = selectedKey === conversation.key;
+              const isMeLast = lastMsg.senderId === user.id;
+              const unread = isUnread(conversation, user.id, seen);
+              return (
+                <li key={conversation.key}>
+                  <button
+                    type="button"
+                    onClick={() => openConversation(conversation.key)}
+                    aria-current={isSelected ? "true" : undefined}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500",
+                      isSelected
+                        ? "bg-emerald-50 dark:bg-emerald-500/10"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                    )}
+                  >
+                    <span className="relative">
+                      <ItemThumb src={conversation.itemPhoto} className="h-12 w-12" />
+                      <Avatar
+                        name={conversation.otherUserName}
+                        src={conversation.otherUserAvatar}
+                        className="absolute -bottom-1 -right-1 h-6 w-6 text-[10px] ring-2 ring-white dark:ring-slate-900"
+                      />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span
+                          className={cn(
+                            "truncate text-sm",
+                            unread ? "font-semibold text-slate-900 dark:text-white" : "font-medium text-slate-800 dark:text-slate-200"
+                          )}
+                        >
+                          {conversation.otherUserName || "Unknown user"}
+                        </span>
+                        <time
+                          dateTime={lastMsg.createdAt}
+                          className={cn(
+                            "shrink-0 text-xs tabular-nums",
+                            unread ? "font-semibold text-emerald-700 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"
+                          )}
+                        >
+                          {formatShortTimestamp(lastMsg.createdAt)}
+                        </time>
+                      </span>
+                      <span className="block truncate text-xs text-slate-500 first-letter:uppercase dark:text-slate-400">
+                        {conversation.itemTitle || "Listing"}
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1 truncate text-sm",
+                            unread ? "font-medium text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"
+                          )}
+                        >
+                          {isMeLast && <span className="text-slate-400 dark:text-slate-500">You: </span>}
+                          {lastMsg.content}
+                        </span>
+                        {unread && (
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500">
+                            <span className="sr-only">Unread</span>
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </aside>
+  );
+
+  let threadBody: React.ReactNode = null;
+  if (selectedConversation) {
+    const list = selectedConversation.messages;
+    threadBody = list.map((msg, i) => {
+      const prev = list[i - 1];
+      const next = list[i + 1];
+      const isMe = msg.senderId === user.id;
+      const day = new Date(msg.createdAt).toDateString();
+      const newDay = !prev || new Date(prev.createdAt).toDateString() !== day;
+      const t = new Date(msg.createdAt).getTime();
+      const joinsPrev =
+        !newDay && !!prev && prev.senderId === msg.senderId && t - new Date(prev.createdAt).getTime() < GROUP_GAP_MS;
+      const joinsNext =
+        !!next &&
+        next.senderId === msg.senderId &&
+        new Date(next.createdAt).toDateString() === day &&
+        new Date(next.createdAt).getTime() - t < GROUP_GAP_MS;
+      return (
+        <Fragment key={msg.id}>
+          {newDay && (
+            <div className="sticky top-0 z-10 flex justify-center py-3" role="separator" aria-label={formatDayLabel(msg.createdAt)}>
+              <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-500 shadow-sm ring-1 ring-slate-200/80 backdrop-blur dark:bg-slate-900/90 dark:text-slate-400 dark:ring-slate-800">
+                {formatDayLabel(msg.createdAt)}
+              </span>
+            </div>
+          )}
+          <div className={cn("flex", isMe ? "justify-end" : "justify-start", joinsPrev ? "mt-1" : "mt-3")}>
+            <div className={cn("flex max-w-[85%] flex-col sm:max-w-[70%]", isMe ? "items-end" : "items-start")}>
+              <div
+                className={cn(
+                  "whitespace-pre-wrap break-words px-3.5 py-2 text-[15px] leading-6",
+                  isMe
+                    ? "rounded-2xl bg-emerald-600 text-white"
+                    : "rounded-2xl bg-white text-slate-900 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700/60",
+                  isMe && joinsNext && "rounded-br-md",
+                  isMe && joinsPrev && "rounded-tr-md",
+                  !isMe && joinsNext && "rounded-bl-md",
+                  !isMe && joinsPrev && "rounded-tl-md"
+                )}
+              >
+                {msg.content}
               </div>
-              <h2 className="text-3xl font-light text-slate-900 dark:text-white mb-4">LOSTFOUND Web</h2>
-              <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-                Send and receive messages securely.<br/>Select a conversation from the left to start chatting.
-              </p>
+              {!joinsNext && (
+                <span className="mt-1 flex items-center gap-1 px-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  {new Date(msg.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  {isMe && i === list.length - 1 && (
+                    <>
+                      <Check className="h-3 w-3" aria-hidden="true" />
+                      Sent
+                    </>
+                  )}
+                </span>
+              )}
             </div>
           </div>
-        )}
+        </Fragment>
+      );
+    });
+  }
+
+  const threadPane = (
+    <section
+      aria-label={selectedConversation ? `Conversation with ${selectedConversation.otherUserName || "unknown user"}` : "Conversation"}
+      className={cn("min-h-0 min-w-0 flex-1 flex-col md:flex", selectedConversation ? "flex" : "hidden")}
+    >
+      {selectedConversation ? (
+        <>
+          <header className="flex shrink-0 items-center gap-3 border-b border-slate-200/80 px-3 py-3 dark:border-slate-800 sm:px-5">
+            <button
+              type="button"
+              onClick={() => setSelectedKey(null)}
+              aria-label="Back to conversations"
+              className={cn(ui.iconBtn, "-ml-1 h-11 w-11 md:hidden")}
+            >
+              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <Avatar
+              name={selectedConversation.otherUserName}
+              src={selectedConversation.otherUserAvatar}
+              className="h-10 w-10 text-sm"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold leading-tight text-slate-900 dark:text-white">
+                {selectedConversation.otherUserName || "Unknown user"}
+              </p>
+              <p className="truncate text-xs text-slate-500 first-letter:uppercase dark:text-slate-400">
+                {selectedConversation.itemTitle || "Listing"}
+              </p>
+            </div>
+            <Link
+              href={`/items/${selectedConversation.itemId}`}
+              className="flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 py-1.5 pl-1.5 pr-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <ItemThumb src={selectedConversation.itemPhoto} className="h-7 w-7 rounded-lg" />
+              <span className="hidden sm:inline">View listing</span>
+              <ArrowUpRight className="h-4 w-4 sm:hidden" aria-hidden="true" />
+              <span className="sr-only sm:hidden">View listing</span>
+            </Link>
+          </header>
+
+          <div
+            ref={threadRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50/70 px-3 pb-4 dark:bg-slate-950/40 sm:px-6"
+          >
+            {threadBody}
+          </div>
+
+          <div className="shrink-0 border-t border-slate-200/80 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900 sm:px-5">
+            {sendError && (
+              <Alert tone="error" className="mb-3" onDismiss={() => setSendError("")}>
+                {sendError}
+              </Alert>
+            )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendReply();
+              }}
+              className="flex items-end gap-2"
+            >
+              <label htmlFor="reply" className="sr-only">
+                Message {selectedConversation.otherUserName || ""}
+              </label>
+              <textarea
+                id="reply"
+                ref={composerRef}
+                value={replyContent}
+                onChange={(e) => {
+                  setReplyContent(e.target.value);
+                  resizeComposer();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    handleSendReply();
+                  }
+                }}
+                placeholder="Write a message…"
+                rows={1}
+                maxLength={MAX_LENGTH}
+                className="max-h-40 min-h-11 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[15px] leading-6 text-slate-900 placeholder:text-slate-400 transition focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-700 dark:bg-slate-800/60 dark:text-white dark:focus:bg-slate-900"
+              />
+              <button
+                type="submit"
+                disabled={!replyContent.trim() || sending}
+                aria-label="Send message"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 dark:focus-visible:ring-offset-slate-900"
+              >
+                {sending ? <Spinner /> : <Send className="h-[18px] w-[18px]" aria-hidden="true" />}
+              </button>
+            </form>
+            <p className="mt-1.5 hidden text-[11px] text-slate-400 dark:text-slate-500 sm:block">
+              Enter to send · Shift + Enter for a new line · Your email and phone stay private
+            </p>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center bg-slate-50/70 px-6 text-center dark:bg-slate-950/40">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-500 dark:ring-slate-800">
+            <MessagesSquare className="h-7 w-7" aria-hidden="true" />
+          </span>
+          <p className="mt-4 font-semibold text-slate-900 dark:text-white">
+            {conversations.length > 0 ? "Select a conversation" : "Your conversations will appear here"}
+          </p>
+          <p className="mt-1 max-w-xs text-sm text-slate-500 dark:text-slate-400">
+            Messages stay inside LostFound, so nobody sees your email or phone number.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+
+  return (
+    <div className="h-[calc(100dvh-64px)] bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto flex h-full max-w-[1600px] md:px-6 md:py-6 lg:px-8">
+        <div className="flex min-h-0 w-full overflow-hidden bg-white dark:bg-slate-900 md:rounded-2xl md:border md:border-slate-200/80 md:shadow-sm md:dark:border-slate-800">
+          {listPane}
+          {threadPane}
+        </div>
       </div>
     </div>
   );

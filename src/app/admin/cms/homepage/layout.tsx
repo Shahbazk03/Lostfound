@@ -1,24 +1,68 @@
 import { ReactNode } from "react";
 import { db } from "@/db";
-import { items, users, cmsHero, cmsStatistics, cmsCategories, cmsFeatures, cmsTestimonials, cmsPricingPlans, cmsGlobalNetwork, cmsFooter } from "@/db/schema";
-import { count, asc, desc } from "drizzle-orm";
+import {
+  items,
+  users,
+  cmsHero,
+  cmsStatistics,
+  cmsCategories,
+  cmsFeatures,
+  cmsPricingPlans,
+  cmsGlobalNetwork,
+  cmsHomepageFaq,
+  cmsHomepageCta,
+  cmsFooter,
+} from "@/db/schema";
+import { count, asc, desc, eq, sql } from "drizzle-orm";
+import { requireAdmin } from "@/lib/auth";
 import CMSLayoutClient from "./CMSLayoutClient";
-import { CMSProvider } from "./CMSProvider";
+import { CMSProvider } from "@/app/admin/cms/homepage/CMSProvider";
 
 export const dynamic = "force-dynamic";
 
 export default async function CMSLayout({ children }: { children: ReactNode }) {
-  const [heroData] = await db.select().from(cmsHero).limit(1);
-  const statisticsList = await db.select().from(cmsStatistics).orderBy(asc(cmsStatistics.orderIndex));
-  const categoriesList = await db.select().from(cmsCategories).orderBy(asc(cmsCategories.orderIndex));
-  const featuresList = await db.select().from(cmsFeatures).orderBy(asc(cmsFeatures.orderIndex));
-  const testimonialsList = await db.select().from(cmsTestimonials).orderBy(desc(cmsTestimonials.createdAt));
-  const pricingPlansList = await db.select().from(cmsPricingPlans).orderBy(asc(cmsPricingPlans.orderIndex));
-  const [globalNetwork] = await db.select().from(cmsGlobalNetwork).limit(1);
-  const [footer] = await db.select().from(cmsFooter).limit(1);
-  
-  const [totalItemsData] = await db.select({ count: count() }).from(items);
-  const [usersData] = await db.select({ count: count() }).from(users);
+  // Middleware already gates /admin; this keeps the DB reads below admin-only
+  // even if that ever changes.
+  await requireAdmin();
+
+  const [
+    [heroData],
+    statisticsList,
+    categoriesList,
+    featuresList,
+    pricingPlansList,
+    [globalNetwork],
+    [faq],
+    [cta],
+    [footer],
+    [recoveredItemsData],
+    [totalItemsData],
+    [usersData],
+    [countriesData],
+  ] = await Promise.all([
+    db.select().from(cmsHero).limit(1),
+    db.select().from(cmsStatistics).orderBy(asc(cmsStatistics.orderIndex)),
+    db.select().from(cmsCategories).orderBy(asc(cmsCategories.orderIndex)),
+    db.select().from(cmsFeatures).orderBy(asc(cmsFeatures.orderIndex)),
+    db.select().from(cmsPricingPlans).orderBy(asc(cmsPricingPlans.orderIndex)),
+    db.select().from(cmsGlobalNetwork).limit(1),
+    // FAQ and CTA must be loaded, otherwise their editors open blank and a
+    // save overwrites the live content.
+    db.select().from(cmsHomepageFaq).limit(1),
+    db.select().from(cmsHomepageCta).limit(1),
+    db.select().from(cmsFooter).limit(1),
+    // Preview stats, computed the same way as the public homepage (src/app/page.tsx).
+    db.select({ count: count() }).from(items).where(eq(items.status, "resolved")),
+    db.select({ count: count() }).from(items),
+    db.select({ count: count() }).from(users),
+    db
+      .select({ count: sql<number>`count(distinct ${items.country})` })
+      .from(items)
+      .where(sql`${items.country} IS NOT NULL`),
+  ]);
+
+  const recoveredItemsCount = recoveredItemsData.count;
+  const totalItemsCount = totalItemsData.count;
 
   const initialData = {
     hero: heroData || {
@@ -37,21 +81,20 @@ export default async function CMSLayout({ children }: { children: ReactNode }) {
     statisticsList,
     categoriesList,
     featuresList,
-    testimonialsList,
     pricingPlansList,
-    recoveredItemsCount: 15420,
+    recoveredItemsCount,
     usersCount: usersData.count,
-    successRate: 85,
-    countriesCount: 142,
+    successRate: totalItemsCount > 0 ? Math.round((recoveredItemsCount / totalItemsCount) * 100) : 0,
+    countriesCount: Number(countriesData.count),
     globalNetwork: globalNetwork || null,
-    footer: footer || null
+    faq: faq || null,
+    cta: cta || null,
+    footer: footer || null,
   };
 
   return (
     <CMSProvider initialData={initialData}>
-      <CMSLayoutClient>
-        {children}
-      </CMSLayoutClient>
+      <CMSLayoutClient>{children}</CMSLayoutClient>
     </CMSProvider>
   );
 }

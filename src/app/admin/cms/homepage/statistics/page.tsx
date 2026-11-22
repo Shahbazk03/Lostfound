@@ -1,163 +1,94 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Loader2, Save, PlusCircle, Trash2, PieChart, GripVertical, CheckCircle } from "lucide-react";
-import { useCMS } from "../CMSProvider";
+import { useState } from "react";
+import { PieChart } from "lucide-react";
+import { useCMS } from "@/app/admin/cms/homepage/CMSProvider";
+import { useConfirm } from "@/components/admin/AdminFeedback";
+import { Checkbox, Field, Input, Select } from "@/components/admin/ui/Form";
+import { AddButton, EmptyList, RepeaterItem, SectionEditor, useSectionPublisher } from "../_components/SectionEditor";
+import { collect, maxLen, move, required, type Errors } from "../_components/validation";
+
+const COLORS = ["emerald", "blue", "purple", "orange", "slate"];
 
 export default function StatisticsPage() {
   const { data, updateStatistics } = useCMS();
-  const [isSaving, setIsSaving] = useState(false);
+  const confirm = useConfirm();
   const [localList, setLocalList] = useState<any[]>(data.statisticsList || []);
-  const [successMsg, setSuccessMsg] = useState("");
+  const { saving, publish } = useSectionPublisher("statisticsList", "/api/admin/cms/statistics", "statistics");
 
-  useEffect(() => {
-    setLocalList(data.statisticsList || []);
-  }, [data.statisticsList]);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSuccessMsg("");
-    try {
-      const res = await fetch("/api/admin/cms/statistics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ statistics: localList }),
-      });
-
-      if (res.ok) {
-        setSuccessMsg("Statistics saved successfully!");
-        setTimeout(() => setSuccessMsg(""), 3000);
-      } else {
-        alert("Failed to save statistics.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Error saving statistics.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleUpdate = (index: number, key: string, value: any) => {
-    const newList = [...localList];
-    newList[index] = { ...newList[index], [key]: value };
+  const commit = (newList: any[]) => {
     setLocalList(newList);
     updateStatistics(newList);
   };
 
-  const handleAdd = () => {
-    const newList = [
-      ...localList,
-      { label: "New Stat", numberValue: "0", color: "emerald", isActive: true }
-    ];
-    setLocalList(newList);
-    updateStatistics(newList);
+  const handleUpdate = (index: number, key: string, value: any) =>
+    commit(localList.map((s, i) => (i === index ? { ...s, [key]: value } : s)));
+
+  const handleAdd = () => commit([...localList, { label: "New stat", numberValue: "0", color: "emerald", isActive: true }]);
+
+  const handleRemove = async (index: number) => {
+    const ok = await confirm({
+      title: "Remove this statistic?",
+      message: "It will be removed from the homepage when you publish.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    commit(localList.filter((_, i) => i !== index));
   };
 
-  const handleRemove = (index: number) => {
-    const newList = [...localList];
-    newList.splice(index, 1);
-    setLocalList(newList);
-    updateStatistics(newList);
-  };
+  const rowErrors: Errors[] = localList.map((s) =>
+    collect([
+      ["numberValue", required(s.numberValue, "Value") ?? maxLen(String(s.numberValue ?? ""), 50)],
+      ["label", required(s.label, "Label") ?? maxLen(s.label, 100)],
+    ])
+  );
+  const errorCount = rowErrors.reduce((n, e) => n + Object.keys(e).length, 0);
 
   return (
-    <div className="w-full flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
-      <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex justify-between items-center sticky top-0 z-10">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <PieChart className="w-5 h-5 text-emerald-500" />
-            Statistics Editor
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Manage stats displayed below the hero section</p>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+    <SectionEditor
+      sectionKey="statisticsList"
+      icon={PieChart}
+      title="Statistics"
+      description="Headline numbers shown below the hero."
+      errorCount={errorCount}
+      saving={saving}
+      onPublish={() => publish({ statistics: localList }, localList)}
+    >
+      {localList.length === 0 && <EmptyList>No statistics yet. Add one to show it on the homepage.</EmptyList>}
+      {localList.map((stat, i) => (
+        <RepeaterItem
+          key={stat.id ?? `new-${i}`}
+          label={stat.label?.trim() || `Statistic ${i + 1}`}
+          index={i}
+          count={localList.length}
+          onMove={(from, to) => commit(move(localList, from, to))}
+          onRemove={() => handleRemove(i)}
+          invalid={Object.keys(rowErrors[i]).length > 0}
+          muted={stat.isActive === false}
         >
-          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isSaving ? "Saving..." : "Publish Changes"}
-        </button>
-      </div>
-
-      <div className="p-6 overflow-y-auto flex-1 space-y-6">
-        {successMsg && (
-          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2 font-medium">
-            <CheckCircle className="w-5 h-5" />
-            {successMsg}
-          </div>
-        )}
-
-        {localList.map((stat, i) => (
-          <div key={i} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-start gap-4">
-            <div className="mt-2 text-slate-400 cursor-grab">
-              <GripVertical className="w-5 h-5" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Value" required error={rowErrors[i].numberValue}>
+              <Input value={stat.numberValue ?? ""} onChange={(e) => handleUpdate(i, "numberValue", e.target.value)} placeholder="15,000+" />
+            </Field>
+            <Field label="Label" required error={rowErrors[i].label}>
+              <Input value={stat.label || ""} onChange={(e) => handleUpdate(i, "label", e.target.value)} placeholder="Recovered items" />
+            </Field>
+            <Field label="Colour">
+              <Select value={stat.color || "emerald"} onChange={(e) => handleUpdate(i, "color", e.target.value)}>
+                {COLORS.map((c) => (
+                  <option key={c} value={c}>
+                    {c.charAt(0).toUpperCase() + c.slice(1)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <div className="flex items-end pb-2.5">
+              <Checkbox checked={stat.isActive !== false} onChange={(v) => handleUpdate(i, "isActive", v)} label="Visible on homepage" />
             </div>
-            <div className="flex-1 grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Value</label>
-                <input
-                  type="text"
-                  value={stat.numberValue || ""}
-                  onChange={(e) => handleUpdate(i, "numberValue", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="e.g. 15,000+"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Label</label>
-                <input
-                  type="text"
-                  value={stat.label || ""}
-                  onChange={(e) => handleUpdate(i, "label", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Recovered Items"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Color</label>
-                <select
-                  value={stat.color || "emerald"}
-                  onChange={(e) => handleUpdate(i, "color", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="emerald">Emerald</option>
-                  <option value="blue">Blue</option>
-                  <option value="purple">Purple</option>
-                  <option value="orange">Orange</option>
-                  <option value="slate">Slate</option>
-                </select>
-              </div>
-              <div className="flex items-end pb-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={stat.isActive !== false}
-                    onChange={(e) => handleUpdate(i, "isActive", e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 bg-slate-100 border-slate-300"
-                  />
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Active (Visible)</span>
-                </label>
-              </div>
-            </div>
-            <button
-              onClick={() => handleRemove(i)}
-              className="p-2.5 bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-xl transition-colors"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
           </div>
-        ))}
-
-        <button
-          onClick={handleAdd}
-          className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl flex items-center justify-center gap-2 text-slate-500 hover:text-emerald-500 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors font-semibold"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Add Statistic
-        </button>
-      </div>
-    </div>
+        </RepeaterItem>
+      ))}
+      <AddButton onClick={handleAdd}>Add statistic</AddButton>
+    </SectionEditor>
   );
 }

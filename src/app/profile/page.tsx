@@ -1,30 +1,33 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- avatars can be data: URLs */
 
-import { LoadingLogo } from "@/components/LoadingLogo";
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
 import {
-  User,
-  Mail,
-  Phone,
+  ArrowRight,
+  ArrowUpRight,
   Camera,
-  Upload,
-  AlertCircle,
+  Crown,
+  LayoutDashboard,
+  Lock,
+  LogOut,
   Save,
-  CheckCircle,
-  PackageSearch,
-  PackageOpen,
+  ShieldCheck,
+  User,
   Wallet,
-  DollarSign,
-  Settings,
-  ArrowRightCircle
 } from "lucide-react";
-import { formatDateTime, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, getInitials } from "@/lib/utils";
 import { useSettings } from "@/lib/settings-context";
-import Background3D from "@/components/Background3D";
+import { Alert } from "@/components/ui/Alert";
+import { Field } from "@/components/ui/Field";
+import { downscaleDataUrl, readFileAsDataUrl } from "@/components/ui/image";
+import { SignInRequired } from "@/components/ui/SignInRequired";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Spinner } from "@/components/ui/Spinner";
+import { ui } from "@/components/ui/styles";
+import { ChangePasswordForm } from "./ChangePasswordForm";
 
 interface ProfileData {
   id: number;
@@ -34,32 +37,78 @@ interface ProfileData {
   avatar: string | null;
 }
 
-interface Item {
-  id: number;
-  type: "lost" | "found";
-  title: string;
-  status: "active" | "resolved" | "archived";
-  createdAt: string;
-  photos: string[];
+// All amounts are in cents (minor units).
+interface EarningsBalance {
+  currency: string;
+  totalEarned: number;
+  totalWithdrawn: number;
+  pendingWithdrawal: number;
+  availableBalance: number;
+  /** Withdrawable now (newer API field; same value as availableBalance). */
+  available?: number;
 }
 
 interface EarningsData {
-  balances: {
-    currency: string;
-    totalEarned: number;
-    totalWithdrawn: number;
-    pendingWithdrawal: number;
-    availableBalance: number;
-  }[];
+  balances: EarningsBalance[];
+}
+
+const CURRENCIES = ["USD", "EUR", "GBP", "INR", "AUD", "CAD"];
+/** The profile API rejects avatars longer than this (data: URL characters). */
+const MAX_AVATAR_CHARS = 1.5 * 1024 * 1024;
+
+const withdrawableCents = (b: EarningsBalance | undefined) =>
+  b ? b.available ?? b.availableBalance : 0;
+
+/** Minimum withdrawal in major units: 1.00, or 100 for INR. */
+const minWithdrawal = (currency: string) => (currency === "INR" ? 100 : 1);
+
+function currencySymbol(currency: string) {
+  try {
+    return (
+      new Intl.NumberFormat(undefined, { style: "currency", currency })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value ?? currency
+    );
+  } catch {
+    return currency;
+  }
+}
+
+const SECTIONS = [
+  { id: "profile", label: "Profile", Icon: User },
+  { id: "wallet", label: "Wallet", Icon: Wallet },
+  { id: "account", label: "Account", Icon: ShieldCheck },
+] as const;
+type SectionId = (typeof SECTIONS)[number]["id"];
+
+function ProfileSkeleton() {
+  return (
+    <div className="min-h-[calc(100dvh-64px)] bg-slate-50 dark:bg-slate-950" role="status" aria-label="Loading settings">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 md:py-10 lg:px-8">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="mt-3 h-4 w-72 max-w-full" />
+        <div className="mt-8 grid gap-8 lg:grid-cols-[200px_minmax(0,1fr)]">
+          <div className="hidden space-y-2 lg:block">
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-9 rounded-lg" />
+            ))}
+          </div>
+          <div className="space-y-6">
+            <Skeleton className="h-80 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ProfilePage() {
   const { user, loading: authLoading, logout, refreshUser } = useAuth();
   const { settings: globalSettings } = useSettings();
   const router = useRouter();
-  
+
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -70,32 +119,37 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [activeTab, setActiveTab] = useState<"items" | "wallet" | "settings">("items");
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [activeSection, setActiveSection] = useState<SectionId>("profile");
 
   // Form states
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [avatar, setAvatar] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) return;
 
     const fetchProfileData = async () => {
       try {
-        const res = await fetch("/api/profile");
+        // Both requests are independent, so run them side by side.
+        const [res, earningsRes] = await Promise.all([fetch("/api/profile"), fetch("/api/user/earnings")]);
         const data = await res.json();
-        
+
         if (res.ok) {
           setProfile(data.user);
           setName(data.user.name || "");
           setPhone(data.user.phone || "");
           setAvatar(data.user.avatar || null);
-          setItems(data.items || []);
         }
 
-        const earningsRes = await fetch("/api/user/earnings");
         if (earningsRes.ok) {
-          setEarnings(await earningsRes.json());
+          const earningsData: EarningsData = await earningsRes.json();
+          setEarnings(earningsData);
+          // Default the withdrawal currency to one the user actually holds.
+          const firstWithBalance = earningsData.balances?.find((b) => withdrawableCents(b) > 0);
+          if (firstWithBalance) setWithdrawCurrency(firstWithBalance.currency);
         }
       } catch (err) {
         console.error("Failed to load profile", err);
@@ -106,6 +160,23 @@ export default function ProfilePage() {
 
     fetchProfileData();
   }, [user]);
+
+  // Highlight the section currently in view in the side navigation.
+  useEffect(() => {
+    if (loading || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveSection(visible[0].target.id as SectionId);
+      },
+      { rootMargin: "-96px 0px -55% 0px" }
+    );
+    SECTIONS.forEach((s) => {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [loading]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,7 +193,7 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (res.ok) {
-        setSuccess("Profile updated successfully!");
+        setSuccess("Profile saved.");
         setProfile(data.user);
         // Update auth context user
         if (refreshUser) {
@@ -132,30 +203,32 @@ export default function ProfilePage() {
       } else {
         setError(data.error || "Failed to update profile");
       }
-    } catch (err) {
+    } catch {
       setError("Something went wrong");
     } finally {
       setSaving(false);
     }
   };
 
-  const processAvatarFile = (file: File) => {
+  const processAvatarFile = async (file: File) => {
     if (!file.type.startsWith("image/")) {
       setError("Please upload an image file");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setAvatar(event.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
+    setError("");
+    const url = await readFileAsDataUrl(file);
+    if (!url) {
+      setError("That image couldn't be read. Try another one.");
+      return;
+    }
+    // Avatars are shown small, so keep them light.
+    setAvatar(await downscaleDataUrl(url, { maxChars: MAX_AVATAR_CHARS, maxSide: 512 }));
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) processAvatarFile(file);
+    e.target.value = "";
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -179,10 +252,22 @@ export default function ProfilePage() {
     e.preventDefault();
     if (!earnings || !withdrawAmount) return;
 
-    const amount = parseFloat(withdrawAmount) * 100; // Convert to cents
-    const currentBalance = earnings.balances?.find(b => b.currency === withdrawCurrency)?.availableBalance || 0;
-    if (amount <= 0 || amount > currentBalance) {
-      setWithdrawMsg({ type: "error", text: "Invalid amount or insufficient balance" });
+    // The API takes decimal amounts in major units (e.g. 12.50); balances
+    // from the earnings API are in cents.
+    const amountMajor = Math.round(parseFloat(withdrawAmount) * 100) / 100;
+    const amountCents = Math.round(amountMajor * 100);
+    const currentBalance = withdrawableCents(earnings.balances?.find(b => b.currency === withdrawCurrency));
+    const minimum = minWithdrawal(withdrawCurrency);
+    if (!Number.isFinite(amountMajor) || amountCents <= 0) {
+      setWithdrawMsg({ type: "error", text: "Enter a valid amount" });
+      return;
+    }
+    if (amountMajor < minimum) {
+      setWithdrawMsg({ type: "error", text: `The minimum withdrawal is ${formatCurrency(minimum * 100, withdrawCurrency)}` });
+      return;
+    }
+    if (amountCents > currentBalance) {
+      setWithdrawMsg({ type: "error", text: `You can withdraw up to ${formatCurrency(currentBalance, withdrawCurrency)}` });
       return;
     }
 
@@ -193,451 +278,439 @@ export default function ProfilePage() {
       const res = await fetch("/api/user/withdrawals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: parseInt(withdrawAmount) * 100, currency: withdrawCurrency }),
+        body: JSON.stringify({ amount: amountMajor, currency: withdrawCurrency }),
       });
 
       if (res.ok) {
-        setWithdrawMsg({ type: "success", text: "Withdrawal request submitted!" });
+        setWithdrawMsg({ type: "success", text: "Withdrawal request submitted. We'll review it and pay it out." });
         setWithdrawAmount("");
         // Refresh earnings
         const earningsRes = await fetch("/api/user/earnings");
         if (earningsRes.ok) setEarnings(await earningsRes.json());
       } else {
-        const data = await res.json();
+        // e.g. 400 { error, available, currency } for insufficient balance
+        const data = await res.json().catch(() => ({}));
         setWithdrawMsg({ type: "error", text: data.error || "Failed to submit request" });
       }
-    } catch (err) {
+    } catch {
       setWithdrawMsg({ type: "error", text: "Something went wrong" });
     } finally {
       setWithdrawLoading(false);
     }
   };
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+      router.push("/");
+    } catch {
+      setLoggingOut(false);
+    }
+  };
+
+  if (authLoading) return <ProfileSkeleton />;
+
   if (!user) {
     return (
-      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center relative">
-        <Background3D />
-        <div className="text-center p-8 bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 relative z-10">
-          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white mb-2">Sign in required</h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-6">You must be logged in to view your profile.</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="bg-emerald-600 text-slate-900 dark:text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-[0_0_15px_rgba(16,185,129,0.5)]"
-          >
-            Sign In
-          </button>
-        </div>
-      </div>
+      <SignInRequired
+        icon={User}
+        title="Sign in to manage your profile"
+        description="Update your details, check your wallet and request withdrawals."
+        next="/profile"
+      />
     );
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center relative">
-        <Background3D />
-        <LoadingLogo className="w-10 h-10 text-emerald-500 animate-spin relative z-10" />
-      </div>
-    );
-  }
+  if (loading) return <ProfileSkeleton />;
 
-  const lostItems = items.filter((item) => item.type === "lost");
-  const foundItems = items.filter((item) => item.type === "found");
-
-  const ItemCard = ({ item }: { item: Item }) => (
-    <Link href={`/items/${item.id}`} className="block group">
-      <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden shadow-lg shadow-emerald-500/5 hover:shadow-xl hover:shadow-emerald-500/10 transition-all flex items-center p-3 gap-4 group-hover:bg-slate-100 dark:bg-slate-800">
-        <div className="w-16 h-16 rounded-lg bg-white dark:bg-slate-900 overflow-hidden flex-shrink-0 relative">
-          {item.photos && item.photos.length > 0 ? (
-            <img src={item.photos[0]} alt={item.title} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-slate-500">
-              {item.type === "lost" ? <PackageSearch className="w-6 h-6" /> : <PackageOpen className="w-6 h-6" />}
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-slate-900 dark:text-white truncate group-hover:text-emerald-400 transition-colors">
-            {item.title}
-          </h4>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-              item.status === "active" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : 
-              item.status === "resolved" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : "bg-slate-100/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50"
-            }`}>
-              {item.status}
-            </span>
-            <span className="text-xs text-slate-600 dark:text-slate-400">{new Date(item.createdAt).toLocaleDateString()}</span>
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
+  const balances = earnings?.balances ?? [];
+  const selectedBalance = withdrawableCents(balances.find((b) => b.currency === withdrawCurrency));
+  const canWithdraw = selectedBalance > 0;
+  const dirty =
+    !!profile &&
+    (name !== (profile.name || "") || phone !== (profile.phone || "") || (avatar || null) !== (profile.avatar || null));
 
   return (
-    <div className="min-h-[calc(100vh-64px)] relative py-12 overflow-hidden">
-      <Background3D />
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        
-        {/* Header Section */}
-        <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200 dark:border-slate-800/50 p-8 shadow-xl mb-8 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden" style={{ perspective: "1000px" }}>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500 to-teal-500 opacity-20 rounded-bl-full pointer-events-none blur-2xl" />
-          
-          <motion.div 
-            whileHover={{ scale: 1.05, rotateY: 10, rotateX: 5 }}
-            className="w-32 h-32 rounded-full border-4 border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden flex-shrink-0 bg-white dark:bg-slate-900 flex items-center justify-center relative"
-          >
-            {avatar ? (
-              <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-16 h-16 text-slate-500" />
-            )}
-            <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-full" />
-          </motion.div>
-          
-          <div className="flex-1 text-center md:text-left">
-            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">{profile?.name || "User Profile"}</h1>
-            <p className="text-slate-600 dark:text-slate-400 font-medium flex items-center justify-center md:justify-start gap-2 mt-1">
-              <Mail className="w-4 h-4 text-slate-500" /> {profile?.email}
-            </p>
-          </div>
-          
-          <div className="flex gap-4">
-            <motion.div whileHover={{ y: -5 }} className="bg-emerald-500/10 rounded-2xl p-4 text-center min-w-[120px] border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
-              <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">Total Earned</p>
-              <p className="text-2xl font-black text-emerald-300 drop-shadow-sm">
-                {earnings?.balances?.length 
-                  ? earnings.balances.map(b => formatCurrency(b.totalEarned, b.currency)).join(' + ') 
-                  : formatCurrency(0, globalSettings?.currency)}
-              </p>
-            </motion.div>
-            <motion.div whileHover={{ y: -5 }} className="bg-blue-500/10 rounded-2xl p-4 text-center min-w-[120px] border border-blue-500/20 shadow-lg shadow-blue-500/5">
-              <p className="text-blue-400 text-xs font-bold uppercase tracking-wider mb-1">Total Items</p>
-              <p className="text-2xl font-black text-blue-300 drop-shadow-sm">{items.length}</p>
-            </motion.div>
-          </div>
-        </div>
+    <div className="min-h-[calc(100dvh-64px)] bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 md:py-10 lg:px-8">
+        <h1 className={ui.pageTitle}>Settings</h1>
+        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Manage your profile, wallet and account.</p>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-2 p-1.5 bg-white/80 dark:bg-slate-900/60 rounded-2xl w-max mx-auto md:mx-0 mb-8 backdrop-blur-xl border border-slate-200 dark:border-slate-800/50">
-          {[
-            { id: "items", label: "My Items", icon: PackageSearch },
-            { id: "wallet", label: "Wallet & Earnings", icon: Wallet },
-            { id: "settings", label: "Settings", icon: User },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`relative flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-300 ${
-                  isActive ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-100/50 dark:bg-slate-800/50"
-                }`}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="activeTabProfile"
-                    className="absolute inset-0 bg-slate-100 dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700/50"
-                    initial={false}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <Icon className="w-4 h-4 relative z-10" />
-                <span className="relative z-10">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Tab Content */}
-        <div className="relative" style={{ perspective: "1200px" }}>
-          <AnimatePresence mode="wait">
-            
-            {/* ITEMS TAB */}
-            {activeTab === "items" && (
-              <motion.div
-                key="items"
-                initial={{ opacity: 0, y: 20, rotateX: 10 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                exit={{ opacity: 0, y: -20, rotateX: -10 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-8"
-              >
-                <div className="grid lg:grid-cols-2 gap-8">
-                  {/* Lost Items */}
-                  <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200 dark:border-slate-800/50 p-8 shadow-xl">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-                        <div className="p-2 bg-red-500/10 rounded-xl border border-red-500/20">
-                          <PackageSearch className="w-6 h-6 text-red-400" />
-                        </div>
-                        Lost Items
-                      </h2>
-                      <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700/50">{lostItems.length}</span>
-                    </div>
-                    {lostItems.length === 0 ? (
-                      <div className="text-center py-12 bg-slate-100 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/50">
-                        <p className="text-slate-600 dark:text-slate-400 font-medium">You haven't reported any lost items.</p>
-                        <Link href="/report" className="text-emerald-400 font-bold text-sm mt-3 inline-block hover:underline">Report an item now &rarr;</Link>
-                      </div>
-                    ) : (
-                      <div className="grid gap-4">
-                        {lostItems.map(item => (
-                          <motion.div key={item.id} whileHover={{ scale: 1.02, x: 5 }} transition={{ type: "spring", stiffness: 300 }}>
-                            <ItemCard item={item} />
-                          </motion.div>
-                        ))}
-                      </div>
+        <div className="mt-8 grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-10">
+          <nav aria-label="Settings sections" className="lg:sticky lg:top-24 lg:self-start">
+            <ul className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:flex-col lg:overflow-visible">
+              {SECTIONS.map(({ id, label, Icon }) => (
+                <li key={id} className="shrink-0">
+                  <a
+                    href={`#${id}`}
+                    onClick={() => setActiveSection(id)}
+                    aria-current={activeSection === id ? "true" : undefined}
+                    className={cn(
+                      "flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500",
+                      activeSection === id
+                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-white dark:ring-slate-800"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-white"
                     )}
-                  </div>
-
-                  {/* Found Items */}
-                  <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200 dark:border-slate-800/50 p-8 shadow-xl">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-                        <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                          <PackageOpen className="w-6 h-6 text-emerald-400" />
-                        </div>
-                        Found Items
-                      </h2>
-                      <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700/50">{foundItems.length}</span>
-                    </div>
-                    {foundItems.length === 0 ? (
-                      <div className="text-center py-12 bg-slate-100 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/50">
-                        <p className="text-slate-600 dark:text-slate-400 font-medium">You haven't reported finding any items.</p>
-                        <Link href="/report" className="text-emerald-400 font-bold text-sm mt-3 inline-block hover:underline">Report a found item &rarr;</Link>
-                      </div>
-                    ) : (
-                      <div className="grid gap-4">
-                        {foundItems.map(item => (
-                          <motion.div key={item.id} whileHover={{ scale: 1.02, x: 5 }} transition={{ type: "spring", stiffness: 300 }}>
-                            <ItemCard item={item} />
-                          </motion.div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* WALLET TAB */}
-            {activeTab === "wallet" && (
-              <motion.div
-                key="wallet"
-                initial={{ opacity: 0, y: 20, rotateX: 10 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                exit={{ opacity: 0, y: -20, rotateX: -10 }}
-                transition={{ duration: 0.3 }}
-                className="max-w-2xl mx-auto"
-              >
-                {earnings && (
-                  <motion.div 
-                    whileHover={{ rotateX: 2, rotateY: -2 }}
-                    className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl rounded-[2rem] border border-slate-200 dark:border-slate-800/50 p-10 shadow-2xl shadow-emerald-500/10 text-slate-900 dark:text-white relative overflow-hidden"
                   >
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-emerald-500 to-teal-400 opacity-20 rounded-full blur-3xl pointer-events-none translate-x-1/3 -translate-y-1/3" />
-                    
-                    <div className="relative z-10">
-                      <div className="flex items-center gap-3 mb-10">
-                        <div className="w-12 h-12 bg-emerald-500/20 rounded-2xl flex items-center justify-center border border-emerald-500/30">
-                          <Wallet className="w-6 h-6 text-emerald-400" />
-                        </div>
-                        <h2 className="text-2xl font-bold">My Wallet</h2>
-                      </div>
-                      
-                      <div className="mb-10 flex gap-4 overflow-x-auto pb-4">
-                        {earnings.balances && earnings.balances.length > 0 ? (
-                          earnings.balances.map(balance => (
-                            <div key={balance.currency} className="min-w-[200px] p-6 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
-                              <p className="text-slate-600 dark:text-slate-400 font-medium uppercase tracking-widest text-xs mb-1">Available ({balance.currency})</p>
-                              <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-300 drop-shadow-sm mb-4">
-                                {formatCurrency(balance.availableBalance, balance.currency)}
-                              </p>
-                              <div className="grid grid-cols-2 gap-2 mt-4">
-                                <div>
-                                  <p className="text-[10px] text-slate-600 dark:text-slate-400 font-medium mb-0.5">Earned</p>
-                                  <p className="text-sm font-bold">{formatCurrency(balance.totalEarned, balance.currency)}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] text-slate-600 dark:text-slate-400 font-medium mb-0.5">Withdrawn</p>
-                                  <p className="text-sm font-bold">{formatCurrency(balance.totalWithdrawn + balance.pendingWithdrawal, balance.currency)}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div>
-                            <p className="text-slate-600 dark:text-slate-400 font-medium uppercase tracking-widest text-sm mb-2">Available Balance</p>
-                            <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-300 drop-shadow-sm">
-                              {formatCurrency(0, globalSettings?.currency)}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {label}
+                  </a>
+                </li>
+              ))}
+              <li className="shrink-0 lg:mt-3 lg:border-t lg:border-slate-200 lg:pt-3 dark:lg:border-slate-800">
+                <Link
+                  href="/dashboard"
+                  className="flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-white"
+                >
+                  <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                  Your listings
+                </Link>
+              </li>
+            </ul>
+          </nav>
 
-                      <form onSubmit={handleWithdrawal} className="space-y-4">
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Request Withdrawal</label>
-                        <div className="flex gap-4">
-                          <div className="relative flex-1 flex">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                              <span className="text-xl font-bold text-emerald-400">
-                                {withdrawCurrency === 'EUR' ? '€' : withdrawCurrency === 'GBP' ? '£' : withdrawCurrency === 'INR' ? '₹' : '$'}
-                              </span>
-                            </div>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="1"
-                              max={(earnings.balances?.find(b => b.currency === withdrawCurrency)?.availableBalance || 0) / 100}
-                              value={withdrawAmount}
-                              onChange={(e) => setWithdrawAmount(e.target.value)}
-                              placeholder="0.00"
-                              disabled={!((earnings.balances?.find(b => b.currency === withdrawCurrency)?.availableBalance || 0) > 0)}
-                              className="w-full pl-12 pr-4 py-4 bg-black/40 border border-slate-200 dark:border-slate-700 border-r-0 rounded-l-2xl text-xl font-bold text-slate-900 dark:text-white placeholder-slate-600 focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50 transition-all"
-                            />
-                            <select
-                                value={withdrawCurrency}
-                                onChange={(e) => setWithdrawCurrency(e.target.value)}
-                                className="w-24 px-3 py-4 bg-black/40 border border-slate-200 dark:border-slate-700 border-l-0 rounded-r-2xl text-sm font-bold text-emerald-400 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                              >
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
-                                <option value="GBP">GBP</option>
-                                <option value="INR">INR</option>
-                                <option value="AUD">AUD</option>
-                                <option value="CAD">CAD</option>
-                              </select>
-                            </div>
-                          
-                          <button
-                            type="submit"
-                            disabled={
-                              withdrawLoading || 
-                              !withdrawAmount || 
-                              !((earnings.balances?.find(b => b.currency === withdrawCurrency)?.availableBalance || 0) > 0)
-                            }
-                            className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-8 py-4 rounded-2xl font-extrabold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40"
-                          >
-                            {withdrawLoading ? <LoadingLogo className="w-5 h-5 animate-spin" /> : <ArrowRightCircle className="w-5 h-5" />}
-                            Withdraw
-                          </button>
-                        </div>
-                        {withdrawMsg.text && (
-                          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className={`p-4 text-sm font-semibold rounded-2xl border ${withdrawMsg.type === 'error' ? 'bg-red-500/10 text-red-300 border-red-500/20' : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'}`}>
-                            {withdrawMsg.text}
-                          </motion.div>
-                        )}
-                      </form>
-                    </div>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-
-            {/* SETTINGS TAB */}
-            {activeTab === "settings" && (
-              <motion.div
-                key="settings"
-                initial={{ opacity: 0, y: 20, rotateX: 10 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                exit={{ opacity: 0, y: -20, rotateX: -10 }}
-                transition={{ duration: 0.3 }}
-                className="max-w-2xl mx-auto"
-              >
-                <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-slate-200 dark:border-slate-800/50 p-8 shadow-xl">
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-8 flex items-center gap-3">
-                    <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50">
-                      <Settings className="w-6 h-6 text-slate-700 dark:text-slate-300" />
-                    </div>
-                    Profile Settings
+          <div className="min-w-0 space-y-6">
+            {/* Profile */}
+            <section id="profile" className={cn(ui.card, "scroll-mt-24")} aria-labelledby="profile-title">
+              <form onSubmit={handleSaveProfile}>
+                <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:px-6">
+                  <h2 id="profile-title" className="text-base font-semibold text-slate-900 dark:text-white">
+                    Profile
                   </h2>
-                  
-                  <form onSubmit={handleSaveProfile} className="space-y-6">
-                    {/* Avatar Upload */}
-                    <div className="flex flex-col items-center mb-8 pb-8 border-b border-slate-200 dark:border-slate-800/50">
-                      <div 
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                        className={`relative w-32 h-32 rounded-full border-4 flex items-center justify-center overflow-hidden cursor-pointer group transition-all ${
-                          isDragging ? "border-emerald-500 scale-105" : "border-slate-200 dark:border-slate-800 hover:border-emerald-500/50"
-                        }`}
-                      >
-                        {avatar ? (
-                          <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-                        ) : (
-                          <User className="w-12 h-12 text-slate-700 dark:text-slate-300" />
-                        )}
-                        
-                        <label className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-sm">
-                          <Camera className="w-6 h-6 text-slate-900 dark:text-white mb-1" />
-                          <span className="text-[10px] font-semibold text-slate-900 dark:text-white uppercase tracking-wider">Change</span>
-                          <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-                        </label>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 text-center font-medium">Click or drag a photo<br/>to update your avatar</p>
-                    </div>
+                  <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                    Your name is shown on your listings. Your phone number is never shown publicly.
+                  </p>
+                </div>
 
+                <div className="space-y-6 px-5 py-6 sm:px-6">
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={cn(
+                        "relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-emerald-50 ring-4 transition dark:bg-emerald-500/10",
+                        isDragging ? "ring-emerald-500" : "ring-white dark:ring-slate-900"
+                      )}
+                    >
+                      {avatar ? (
+                        <img src={avatar} alt="Your avatar" decoding="async" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
+                          {getInitials(name || profile?.name)}
+                        </span>
+                      )}
+                      {isDragging && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-emerald-600/70 text-white">
+                          <Camera className="h-6 w-6" aria-hidden="true" />
+                        </span>
+                      )}
+                    </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
-                        <User className="w-4 h-4 text-slate-500" /> Full Name
-                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => fileInputRef.current?.click()} className={ui.btnSecondary}>
+                          <Camera className="h-4 w-4" aria-hidden="true" />
+                          {avatar ? "Change photo" : "Upload photo"}
+                        </button>
+                        {avatar && (
+                          <button type="button" onClick={() => setAvatar(null)} className={cn(ui.btnGhost, "min-h-11")}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        JPG, PNG or WebP. You can also drag a photo onto the circle.
+                      </p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                        className="sr-only"
+                        tabIndex={-1}
+                        aria-label="Upload a new avatar"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field id="profile-name" label="Full name">
                       <input
                         type="text"
+                        id="profile-name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 text-slate-900 dark:text-white rounded-xl focus:bg-slate-100 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-medium"
+                        autoComplete="name"
+                        maxLength={100}
+                        className={ui.input}
                         required
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-slate-500" /> Email Address
-                      </label>
-                      <input
-                        type="email"
-                        value={profile?.email || ""}
-                        disabled
-                        className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 text-slate-500 rounded-xl outline-none cursor-not-allowed font-medium"
-                      />
-                      <p className="text-[11px] font-medium text-slate-500 mt-2">Email address cannot be changed.</p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-slate-500" /> Phone Number
-                      </label>
+                    </Field>
+                    <Field id="profile-phone" label="Phone number" optional>
                       <input
                         type="tel"
+                        id="profile-phone"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
+                        autoComplete="tel"
+                        maxLength={50}
                         placeholder="+1 (555) 000-0000"
-                        className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 text-slate-900 dark:text-white rounded-xl focus:bg-slate-100 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-medium"
+                        className={ui.input}
                       />
-                    </div>
+                    </Field>
+                  </div>
 
-                    {error && <motion.div initial={{opacity:0}} animate={{opacity:1}} className="p-4 bg-red-500/10 text-red-400 font-medium text-sm rounded-xl border border-red-500/20">{error}</motion.div>}
-                    {success && <motion.div initial={{opacity:0}} animate={{opacity:1}} className="p-4 bg-emerald-500/10 text-emerald-400 font-medium text-sm rounded-xl border border-emerald-500/20 flex items-center gap-2"><CheckCircle className="w-5 h-5"/>{success}</motion.div>}
+                  {error && (
+                    <Alert tone="error" onDismiss={() => setError("")}>
+                      {error}
+                    </Alert>
+                  )}
+                </div>
 
-                    <div className="pt-4">
+                <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/60 sm:px-6">
+                  {success && (
+                    <p role="status" className="mr-auto text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                      {success}
+                    </p>
+                  )}
+                  <button type="submit" disabled={saving || !dirty} className={ui.btnPrimary}>
+                    {saving ? <Spinner /> : <Save className="h-4 w-4" aria-hidden="true" />}
+                    Save changes
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            {/* Wallet */}
+            <section id="wallet" className={cn(ui.card, "scroll-mt-24")} aria-labelledby="wallet-title">
+              <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:px-6">
+                <h2 id="wallet-title" className="text-base font-semibold text-slate-900 dark:text-white">
+                  Wallet
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                  Earnings from people unlocking the precise location on your listings.
+                </p>
+              </div>
+
+              <div className="px-5 py-6 sm:px-6">
+                {!earnings ? (
+                  <Alert tone="warning">We couldn&apos;t load your wallet right now. Refresh the page to try again.</Alert>
+                ) : balances.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center dark:border-slate-700">
+                    <p className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">
+                      {formatCurrency(0, globalSettings?.currency)}
+                    </p>
+                    <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+                      No earnings yet. When someone unlocks a precise location you added, the payment shows up here.
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {balances.map((balance) => (
+                      <li
+                        key={balance.currency}
+                        className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/30"
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Available to withdraw</p>
+                          <span className="rounded-md bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">
+                            {balance.currency}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-slate-900 dark:text-white">
+                          {formatCurrency(withdrawableCents(balance), balance.currency)}
+                        </p>
+                        <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-200/80 pt-3 text-xs dark:border-slate-700/60">
+                          <div>
+                            <dt className="text-slate-500 dark:text-slate-400">Earned</dt>
+                            <dd className="mt-0.5 font-medium tabular-nums text-slate-900 dark:text-white">
+                              {formatCurrency(balance.totalEarned, balance.currency)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-slate-500 dark:text-slate-400">Pending</dt>
+                            <dd className="mt-0.5 font-medium tabular-nums text-slate-900 dark:text-white">
+                              {formatCurrency(balance.pendingWithdrawal, balance.currency)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-slate-500 dark:text-slate-400">Paid out</dt>
+                            <dd className="mt-0.5 font-medium tabular-nums text-slate-900 dark:text-white">
+                              {formatCurrency(balance.totalWithdrawn, balance.currency)}
+                            </dd>
+                          </div>
+                        </dl>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {earnings && (
+                  <form onSubmit={handleWithdrawal} className="mt-6 border-t border-slate-100 pt-6 dark:border-slate-800">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Request a withdrawal</h3>
+                    <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                      Requests are reviewed before payout. Minimum{" "}
+                      {formatCurrency(minWithdrawal(withdrawCurrency) * 100, withdrawCurrency)}.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                      <div className="flex flex-1 gap-2">
+                        <select
+                          value={withdrawCurrency}
+                          onChange={(e) => setWithdrawCurrency(e.target.value)}
+                          aria-label="Withdrawal currency"
+                          className={cn(ui.input, "w-24 shrink-0 px-2.5 font-medium")}
+                        >
+                          {CURRENCIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="relative flex-1">
+                          <span
+                            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400"
+                            aria-hidden="true"
+                          >
+                            {currencySymbol(withdrawCurrency)}
+                          </span>
+                          <label htmlFor="withdraw-amount" className="sr-only">
+                            Amount
+                          </label>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min={minWithdrawal(withdrawCurrency)}
+                            max={selectedBalance / 100}
+                            id="withdraw-amount"
+                            value={withdrawAmount}
+                            onChange={(e) => setWithdrawAmount(e.target.value)}
+                            placeholder="0.00"
+                            disabled={!canWithdraw}
+                            className={cn(ui.input, "pl-10 pr-16 tabular-nums")}
+                          />
+                          {canWithdraw && (
+                            <button
+                              type="button"
+                              onClick={() => setWithdrawAmount((selectedBalance / 100).toFixed(2))}
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+                            >
+                              Max
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       <button
                         type="submit"
-                        disabled={saving}
-                        className="w-full bg-emerald-600 text-slate-900 dark:text-white py-4 rounded-xl font-bold hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
+                        disabled={withdrawLoading || !withdrawAmount || !canWithdraw}
+                        className={ui.btnPrimary}
                       >
-                        {saving ? <LoadingLogo className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                        Save Profile Settings
+                        {withdrawLoading ? <Spinner /> : <ArrowUpRight className="h-4 w-4" aria-hidden="true" />}
+                        Withdraw
                       </button>
                     </div>
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      {canWithdraw
+                        ? `Up to ${formatCurrency(selectedBalance, withdrawCurrency)} available in ${withdrawCurrency}.`
+                        : `No ${withdrawCurrency} balance to withdraw.`}
+                    </p>
+                    {withdrawMsg.text && (
+                      <Alert
+                        tone={withdrawMsg.type === "error" ? "error" : "success"}
+                        className="mt-4"
+                        onDismiss={() => setWithdrawMsg({ type: "", text: "" })}
+                      >
+                        {withdrawMsg.text}
+                      </Alert>
+                    )}
                   </form>
-                </div>
-              </motion.div>
-            )}
+                )}
+              </div>
+            </section>
 
-          </AnimatePresence>
+            {/* Account */}
+            <section id="account" className={cn(ui.card, "scroll-mt-24")} aria-labelledby="account-title">
+              <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:px-6">
+                <h2 id="account-title" className="text-base font-semibold text-slate-900 dark:text-white">
+                  Account
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Sign-in details and membership.</p>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                <div className="px-5 py-5 sm:px-6">
+                  <Field id="profile-email" label="Email address" hint="Your email can't be changed.">
+                    <div className="relative">
+                      <input
+                        type="email"
+                        id="profile-email"
+                        value={profile?.email || user.email || ""}
+                        readOnly
+                        aria-describedby="profile-email-hint"
+                        className={cn(ui.input, "cursor-default bg-slate-50 pr-10 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300")}
+                      />
+                      <Lock
+                        className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </Field>
+                </div>
+
+                <ChangePasswordForm />
+
+                <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-xl",
+                        user.hasSubscription
+                          ? "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
+                          : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                      )}
+                    >
+                      <Crown className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">
+                        {user.hasSubscription ? "Premium" : "Free plan"}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {user.hasSubscription
+                          ? "Unlimited messaging across all listings."
+                          : "Unlock chats one at a time, or go Premium from any listing."}
+                      </p>
+                    </div>
+                  </div>
+                  {!user.hasSubscription && (
+                    <Link href="/browse" className={cn(ui.btnGhost, "self-start sm:self-auto")}>
+                      Browse listings
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900 dark:text-white">Sign out</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Sign out of LostFound on this device.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className={cn(
+                      ui.btnSecondary,
+                      "self-start text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-500/10 sm:self-auto"
+                    )}
+                  >
+                    {loggingOut ? <Spinner /> : <LogOut className="h-4 w-4" aria-hidden="true" />}
+                    Log out
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>

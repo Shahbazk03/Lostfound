@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { items, users } from "@/db/schema";
+import { items, users, itemStatusEnum } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
-import { eq, desc, and } from "drizzle-orm";
+import { authErrorResponse } from "@/lib/api-errors";
+import { eq, desc } from "drizzle-orm";
+
+type ItemStatus = (typeof itemStatusEnum.enumValues)[number];
+const ITEM_STATUSES: readonly string[] = itemStatusEnum.enumValues;
 
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin();
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status");
-
-    const conditions = [];
-    if (status) conditions.push(eq(items.status, status as "active" | "resolved" | "archived"));
+    // An unknown status is ignored (lists everything) rather than failing.
+    const status = request.nextUrl.searchParams.get("status");
+    const where =
+      status && ITEM_STATUSES.includes(status) ? eq(items.status, status as ItemStatus) : undefined;
 
     const results = await db
       .select({
@@ -33,21 +36,14 @@ export async function GET(request: NextRequest) {
       })
       .from(items)
       .leftJoin(users, eq(items.userId, users.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .where(where)
       .orderBy(desc(items.createdAt));
 
     return NextResponse.json({ items: results });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) return authResponse;
     console.error("Get admin items error:", error);
-    if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (error instanceof Error && error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

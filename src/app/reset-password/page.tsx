@@ -3,18 +3,34 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LoadingLogo } from "@/components/LoadingLogo";
-import { CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Alert } from "@/components/ui/Alert";
+import { AuthFormSkeleton, AuthShell } from "@/components/ui/AuthShell";
+import { Field } from "@/components/ui/Field";
+import { PasswordInput } from "@/components/ui/PasswordInput";
+import { PasswordStrength } from "@/components/ui/PasswordStrength";
+import { Spinner } from "@/components/ui/Spinner";
+import { ui } from "@/components/ui/styles";
+
+const backToLogin = (
+  <Link
+    href="/login"
+    className="inline-flex items-center gap-1.5 rounded font-medium text-slate-600 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-white"
+  >
+    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+    Back to sign in
+  </Link>
+);
 
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialEmail = searchParams.get("email") || "";
-  
+
   const [email, setEmail] = useState(initialEmail);
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -22,9 +38,9 @@ function ResetPasswordContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
       return;
     }
 
@@ -37,7 +53,7 @@ function ResetPasswordContent() {
         body: JSON.stringify({ email, token, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         throw new Error(data.error || "Failed to reset password");
@@ -56,147 +72,111 @@ function ResetPasswordContent() {
 
   if (success) {
     return (
-      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 py-12 px-4">
-        <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 p-8 shadow-sm text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-          </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Password Reset Successful</h3>
-          <p className="text-slate-600 mb-6">
-            Your password has been successfully updated. You will be redirected to the login page shortly.
-          </p>
-          <Link 
-            href="/login"
-            className="w-full inline-block bg-emerald-600 text-slate-900 dark:text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors"
-          >
-            Go to Login
-          </Link>
-        </div>
-      </div>
+      <AuthShell
+        title="Password updated"
+        subtitle="You can now sign in with your new password. Taking you to sign in…"
+      >
+        <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/20">
+          <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+        </span>
+        <Link href="/login" className={cn(ui.btnPrimary, "w-full")}>
+          Go to sign in
+        </Link>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 py-12 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
-              <span className="text-slate-900 dark:text-white font-bold text-lg tracking-wider">LF</span>
-            </div>
-            <span className="text-2xl font-bold text-slate-900 tracking-tight">LOSTFOUND</span>
+    <AuthShell
+      title="Choose a new password"
+      subtitle="Enter the 6-digit code from your email, then pick a new password."
+      footer={
+        <>
+          Didn&apos;t get a code?{" "}
+          <Link href="/forgot-password" className="font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300">
+            Send another
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">
-            Reset Password
-          </h1>
-          <p className="text-slate-600 mt-1">
-            Enter your code and new password
-          </p>
+          <div className="mt-4">{backToLogin}</div>
+        </>
+      }
+    >
+      {error && (
+        <Alert tone="error" className="mb-6" onDismiss={() => setError("")}>
+          {error}
+        </Alert>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Field id="reset-email" label="Email">
+          <input
+            type="email"
+            id="reset-email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            className={cn(ui.input, initialEmail && "bg-slate-50 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300")}
+            placeholder="you@example.com"
+            required
+            readOnly={!!initialEmail}
+          />
+        </Field>
+
+        <Field id="reset-code" label="Reset code">
+          <input
+            type="text"
+            id="reset-code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={token}
+            onChange={(e) => setToken(e.target.value.replace(/\s/g, ""))}
+            className={cn(ui.input, "h-14 text-center font-mono text-2xl tracking-[0.5em]")}
+            placeholder="••••••"
+            maxLength={6}
+            autoFocus={!!initialEmail}
+            required
+          />
+        </Field>
+
+        <div>
+          <Field id="reset-password" label="New password">
+            <PasswordInput
+              id="reset-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              autoComplete="new-password"
+              aria-describedby="reset-password-strength"
+              required
+              minLength={8}
+            />
+          </Field>
+          <PasswordStrength password={password} id="reset-password-strength" />
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
+        <button type="submit" disabled={loading} className={cn(ui.btnPrimary, "w-full")}>
+          {loading ? (
+            <>
+              <Spinner />
+              Updating password…
+            </>
+          ) : (
+            "Reset password"
           )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-slate-50"
-                placeholder="you@example.com"
-                required
-                readOnly={!!initialEmail}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                6-Digit Reset Code
-              </label>
-              <input
-                type="text"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-center tracking-[0.25em] font-mono text-lg"
-                placeholder="000000"
-                maxLength={6}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                New Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all pr-10"
-                  placeholder="Enter new password"
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-emerald-600 text-slate-900 dark:text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <LoadingLogo className="w-4 h-4 animate-spin" />
-                  Resetting...
-                </>
-              ) : (
-                "Reset Password"
-              )}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <Link
-              href="/login"
-              className="text-sm text-slate-600 hover:text-slate-900 font-medium"
-            >
-              Back to login
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
+        </button>
+      </form>
+    </AuthShell>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 py-12 px-4">
-        <LoadingLogo className="w-8 h-8 animate-spin" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <AuthShell title="Choose a new password" subtitle="Enter the 6-digit code from your email, then pick a new password.">
+          <AuthFormSkeleton />
+        </AuthShell>
+      }
+    >
       <ResetPasswordContent />
     </Suspense>
   );

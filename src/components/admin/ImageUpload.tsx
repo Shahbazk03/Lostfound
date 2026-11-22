@@ -5,6 +5,8 @@ import { Upload, X, Image as ImageIcon, Loader2, Crop, Check } from "lucide-reac
 import Image from "next/image";
 import ReactCrop, { Crop as CropType, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import { readApiError, errorMessage } from "@/components/admin/admin-api";
+import { useToast } from "@/components/admin/AdminFeedback";
 
 interface ImageUploadProps {
   value: string;
@@ -14,6 +16,7 @@ interface ImageUploadProps {
 }
 
 export function ImageUpload({ value, onChange, label = "Upload Image", aspectRatio }: ImageUploadProps) {
+  const toast = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -76,33 +79,40 @@ export function ImageUpload({ value, onChange, label = "Upload Image", aspectRat
       );
 
       // Convert canvas to WebP for better compression
+      // The callback runs after this try/catch has returned, so it handles
+      // its own errors and always clears the uploading state.
       canvas.toBlob(async (blob) => {
-        if (!blob) {
-          console.error('Canvas is empty');
-          return;
+        try {
+          if (!blob) {
+            toast.error("Couldn't process the image. Try a different file.");
+            return;
+          }
+
+          const file = new File([blob], "cropped-image.webp", { type: "image/webp" });
+          const formData = new FormData();
+          formData.append("file", file);
+
+          const res = await fetch("/api/admin/media", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            onChange(data.file.url);
+            toast.success("Image uploaded");
+          } else {
+            toast.error(await readApiError(res, "Upload failed"));
+          }
+        } catch (error) {
+          toast.error(errorMessage(error, "Upload failed"));
+        } finally {
+          setIsUploading(false);
         }
-
-        const file = new File([blob], "cropped-image.webp", { type: "image/webp" });
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const res = await fetch("/api/admin/media", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          onChange(data.file.url);
-        } else {
-          alert("Upload failed");
-        }
-        setIsUploading(false);
       }, 'image/webp', 0.9);
 
     } catch (error) {
-      console.error("Error uploading cropped image:", error);
-      alert("Upload failed");
+      toast.error(errorMessage(error, "Upload failed"));
       setIsUploading(false);
     }
   };
@@ -181,7 +191,7 @@ export function ImageUpload({ value, onChange, label = "Upload Image", aspectRat
                 <ImageIcon className="w-6 h-6 text-slate-400" />
               </div>
               <span className="text-sm font-medium">Click or drag image to upload</span>
-              <span className="text-xs text-slate-400 mt-1">SVG, PNG, JPG, WEBP, AVIF</span>
+              <span className="text-xs text-slate-400 mt-1">PNG, JPG, WebP, GIF or AVIF</span>
             </div>
           )}
         </div>
@@ -190,7 +200,7 @@ export function ImageUpload({ value, onChange, label = "Upload Image", aspectRat
       <input
         ref={inputRef}
         type="file"
-        accept="image/png, image/jpeg, image/webp, image/svg+xml, image/avif"
+        accept="image/png, image/jpeg, image/webp, image/gif, image/avif"
         onChange={onSelectFile}
         className="hidden"
       />

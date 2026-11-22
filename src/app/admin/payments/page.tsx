@@ -1,130 +1,238 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { Search, SearchX } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { Clock, Copy, CreditCard, ExternalLink, Wallet, XCircle } from "lucide-react";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { adminFetch } from "@/components/admin/admin-api";
+import { useAdminLoader } from "@/components/admin/useAdminLoader";
+import { useToast } from "@/components/admin/AdminFeedback";
+import { DataTable, type Column } from "@/components/admin/ui/DataTable";
+import { FilterTabs } from "@/components/admin/ui/FilterTabs";
+import type { MenuItem } from "@/components/admin/ui/Menu";
+import { PageContainer, PageHeader } from "@/components/admin/ui/PageHeader";
+import { StatCard } from "@/components/admin/ui/StatCard";
+import { StatusBadge } from "@/components/admin/ui/StatusBadge";
 
 interface AdminPayment {
   id: number;
   amount: number;
-  currency: string;
+  currency?: string | null;
+  amountFormatted?: string;
   status: string;
   stripeSessionId: string | null;
-  userEmail?: string;
-  userName?: string;
+  itemId?: number | null;
+  userEmail?: string | null;
+  userName?: string | null;
+  itemTitle?: string | null;
   createdAt: string;
 }
 
-export default function PaymentsPage() {
-  const { user } = useAuth();
-  const [payments, setPayments] = useState<AdminPayment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+type StatusFilter = "all" | "completed" | "pending" | "failed";
 
-  const fetchPayments = async () => {
+function safeCurrency(amount: number, currency?: string | null) {
+  try {
+    return formatCurrency(amount, (currency || "USD").toUpperCase());
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${currency ?? ""}`.trim();
+  }
+}
+
+const amountText = (p: AdminPayment) => p.amountFormatted || safeCurrency(p.amount, p.currency);
+
+export default function PaymentsPage() {
+  const toast = useToast();
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+
+  const loadPayments = useCallback(async () => {
+    const data = await adminFetch<{ payments?: AdminPayment[] }>("/api/admin/payments", {}, "Failed to load payments");
+    setPayments(data?.payments ?? []);
+  }, []);
+  const { loading, error: loadError, reload } = useAdminLoader(loadPayments, "Failed to load payments");
+
+  const counts = useMemo(
+    () => ({
+      all: payments.length,
+      completed: payments.filter((p) => p.status === "completed").length,
+      pending: payments.filter((p) => p.status === "pending").length,
+      failed: payments.filter((p) => p.status === "failed").length,
+    }),
+    [payments]
+  );
+
+  // Revenue per currency; amounts in different currencies are never added together.
+  const revenue = useMemo(() => {
+    const map = new Map<string, { amount: number; count: number }>();
+    for (const p of payments) {
+      if (p.status !== "completed") continue;
+      const cur = (p.currency || "USD").toUpperCase();
+      const e = map.get(cur) ?? { amount: 0, count: 0 };
+      e.amount += p.amount;
+      e.count += 1;
+      map.set(cur, e);
+    }
+    return Array.from(map.entries())
+      .map(([currency, v]) => ({ currency, ...v }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [payments]);
+
+  const rows = useMemo(
+    () => (statusFilter === "all" ? payments : payments.filter((p) => p.status === statusFilter)),
+    [payments, statusFilter]
+  );
+
+  const copySession = async (id: string) => {
     try {
-      const res = await fetch("/api/admin/payments");
-      const data = await res.json();
-      if (res.ok) setPayments(data.payments || data || []);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load payments");
-    } finally {
-      setLoading(false);
+      await navigator.clipboard.writeText(id);
+      toast.success("Session ID copied");
+    } catch {
+      toast.error("Couldn't copy the session ID");
     }
   };
 
-  useEffect(() => {
-    if (user?.role === "admin") fetchPayments();
-  }, [user]);
+  const columns: Column<AdminPayment>[] = [
+    {
+      id: "id",
+      header: "Payment",
+      sortValue: (p) => p.id,
+      cell: (p) => (
+        <div className="min-w-0 max-w-xs">
+          <p className="font-semibold text-slate-900 dark:text-white">Payment #{p.id}</p>
+          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{p.itemTitle || (p.itemId ? `Item #${p.itemId}` : "—")}</p>
+        </div>
+      ),
+    },
+    {
+      id: "user",
+      header: "User",
+      sortValue: (p) => (p.userName || "").toLowerCase(),
+      cell: (p) => (
+        <div className="min-w-0">
+          <p className="truncate font-medium text-slate-900 dark:text-white">{p.userName || "Unknown"}</p>
+          {p.userEmail && <p className="truncate text-xs text-slate-500 dark:text-slate-400">{p.userEmail}</p>}
+        </div>
+      ),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      sortValue: (p) => p.amount,
+      cell: (p) => <span className="font-semibold tabular-nums text-slate-900 dark:text-white">{amountText(p)}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      sortValue: (p) => p.status,
+      cell: (p) => <StatusBadge kind="payment" status={p.status} />,
+    },
+    {
+      id: "session",
+      header: "Stripe session",
+      hideOnMobile: true,
+      cell: (p) =>
+        p.stripeSessionId ? (
+          <span className="block max-w-[11rem] truncate font-mono text-xs text-slate-500 dark:text-slate-400" title={p.stripeSessionId}>
+            {p.stripeSessionId}
+          </span>
+        ) : (
+          <span className="text-slate-400">—</span>
+        ),
+    },
+    {
+      id: "createdAt",
+      header: "Date",
+      sortValue: (p) => new Date(p.createdAt).getTime(),
+      cell: (p) => (
+        <span className="whitespace-nowrap text-slate-500 dark:text-slate-400" title={formatDateTime(p.createdAt)}>
+          {formatDate(p.createdAt)}
+        </span>
+      ),
+    },
+  ];
 
-  const filteredPayments = payments.filter(p => 
-    p.userName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    p.userEmail?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.stripeSessionId?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const rowActions = (p: AdminPayment): MenuItem[] => [
+    ...(p.itemId ? [{ label: "View item", icon: ExternalLink, href: `/items/${p.itemId}`, external: true }] : []),
+    {
+      label: "Copy session ID",
+      icon: Copy,
+      onSelect: () => p.stripeSessionId && copySession(p.stripeSessionId),
+      disabled: !p.stripeSessionId,
+      hint: p.stripeSessionId ? undefined : "No Stripe session recorded.",
+    },
+  ];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto w-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Payments & Transactions</h1>
-          <p className="text-slate-500">Monitor all incoming payments and subscriptions.</p>
-        </div>
+    <PageContainer>
+      <PageHeader title="Payments" description="Every chat-unlock and subscription payment processed through Stripe." />
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Revenue (completed)"
+          icon={Wallet}
+          tone="emerald"
+          value={
+            loading ? (
+              <span className="inline-block h-7 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-800" />
+            ) : revenue.length === 0 ? (
+              safeCurrency(0, "USD")
+            ) : (
+              safeCurrency(revenue[0].amount, revenue[0].currency)
+            )
+          }
+          sub={
+            !loading && revenue.length > 1
+              ? revenue
+                  .slice(1)
+                  .map((r) => safeCurrency(r.amount, r.currency))
+                  .join(" · ")
+              : !loading
+                ? `${counts.completed} completed payment${counts.completed === 1 ? "" : "s"}`
+                : undefined
+          }
+        />
+        <StatCard label="Completed" icon={CreditCard} tone="sky" value={loading ? "—" : counts.completed.toLocaleString()} />
+        <StatCard label="Pending" icon={Clock} tone="amber" value={loading ? "—" : counts.pending.toLocaleString()} sub="Awaiting Stripe confirmation" />
+        <StatCard label="Failed" icon={XCircle} tone="rose" value={loading ? "—" : counts.failed.toLocaleString()} />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden mb-8">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <div className="relative w-full max-w-md">
-            <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
-              placeholder="Search by user or transaction ID..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-          <div className="text-sm font-medium text-slate-500">
-            Total Payments: {payments.length}
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="p-12 text-center text-slate-500">Loading payments...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-950/50 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
-                  <th className="px-6 py-4">Transaction Details</th>
-                  <th className="px-6 py-4">User</th>
-                  <th className="px-6 py-4">Amount</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                {filteredPayments.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900 dark:text-white">Payment #{p.id}</div>
-                      <div className="text-xs text-slate-500 font-mono truncate max-w-[200px]">{p.stripeSessionId || "N/A"}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-slate-900 dark:text-white">{p.userName || "Unknown"}</div>
-                      <div className="text-xs text-slate-500">{p.userEmail}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">
-                        {formatCurrency(p.amount, p.currency)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold capitalize ${p.status === "completed" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30" : p.status === "pending" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30" : "bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30"}`}>
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm text-slate-500">
-                      {formatDate(p.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-                {filteredPayments.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-12 text-center flex flex-col items-center justify-center">
-                      <SearchX className="w-12 h-12 text-slate-300 mb-4 mx-auto" />
-                      <div className="text-slate-500 text-lg">No payments found.</div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
+      <DataTable
+        caption="Payments"
+        rows={rows}
+        columns={columns}
+        getRowId={(p) => p.id}
+        loading={loading}
+        error={loadError}
+        onRetry={reload}
+        search={{
+          placeholder: "Search user, item or session ID…",
+          match: (p, q) =>
+            [p.userName, p.userEmail, p.itemTitle, p.stripeSessionId, `#${p.id}`]
+              .filter(Boolean)
+              .some((v) => String(v).toLowerCase().includes(q)),
+        }}
+        toolbar={
+          <FilterTabs<StatusFilter>
+            label="Filter by status"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: "all", label: "All", count: counts.all },
+              { value: "completed", label: "Completed", count: counts.completed },
+              { value: "pending", label: "Pending", count: counts.pending },
+              { value: "failed", label: "Failed", count: counts.failed },
+            ]}
+          />
+        }
+        resetKey={statusFilter}
+        initialSort={{ id: "createdAt", dir: "desc" }}
+        rowActions={rowActions}
+        empty={{
+          icon: CreditCard,
+          title: statusFilter === "all" ? "No payments yet" : `No ${statusFilter} payments`,
+          description: statusFilter === "all" ? "Payments appear here once users unlock chats or subscribe." : undefined,
+        }}
+      />
+    </PageContainer>
   );
 }

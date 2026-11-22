@@ -147,6 +147,25 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const supportTicketStatusEnum = pgEnum("support_ticket_status", [
+  "open",
+  "in_progress",
+  "resolved",
+  "closed",
+]);
+
+export const supportTickets = pgTable("support_tickets", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  status: supportTicketStatusEnum("status").default("open").notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }), // Optional, if they are logged in
+  assignedTo: integer("assigned_to").references(() => users.id, { onDelete: "set null" }), // Admin handling it
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const organizationSettings = pgTable("organization_settings", {
   id: serial("id").primaryKey(),
   organizationName: varchar("organization_name", { length: 255 }).notNull(),
@@ -177,6 +196,8 @@ export type NewWithdrawalRequest = typeof withdrawalRequests.$inferInsert;
 export type Message = typeof messages.$inferSelect;
 export type OrganizationSettings = typeof organizationSettings.$inferSelect;
 export type NewOrganizationSettings = typeof organizationSettings.$inferInsert;
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type NewSupportTicket = typeof supportTickets.$inferInsert;
 
 export const gameRewards = pgTable("game_rewards", {
   id: serial("id").primaryKey(),
@@ -518,4 +539,16 @@ export const blogViews = pgTable("blog_views", {
   userAgent: text("user_agent"),
   viewedAt: timestamp("viewed_at").defaultNow().notNull(),
 });
+
+export const visitorSessions = pgTable("visitor_sessions", {
+  id: serial("id").primaryKey(),
+  visitorId: varchar("visitor_id", { length: 255 }).notNull().unique(),
+  startTime: timestamp("start_time").defaultNow().notNull(),
+  lastHeartbeat: timestamp("last_heartbeat").defaultNow().notNull(),
+  durationSeconds: integer("duration_seconds").default(0).notNull(),
+  path: varchar("path", { length: 255 }),
+});
+
+export type VisitorSession = typeof visitorSessions.$inferSelect;
+export type NewVisitorSession = typeof visitorSessions.$inferInsert;
 

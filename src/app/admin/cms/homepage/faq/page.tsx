@@ -1,192 +1,110 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Loader2, Save, PlusCircle, Trash2, HelpCircle, GripVertical, CheckCircle } from "lucide-react";
-import { useCMS } from "../CMSProvider";
+import { useState } from "react";
+import { HelpCircle } from "lucide-react";
+import { useCMS } from "@/app/admin/cms/homepage/CMSProvider";
+import { useConfirm } from "@/components/admin/AdminFeedback";
+import { Field, Input, Switch, Textarea } from "@/components/admin/ui/Form";
+import { AddButton, EditorCard, EmptyList, RepeaterItem, SectionEditor, useSectionPublisher } from "../_components/SectionEditor";
+import { collect, maxLen, move, required, type Errors } from "../_components/validation";
 
 export default function HomepageFaqPage() {
   const { data, updateFaq } = useCMS();
-  const [isSaving, setIsSaving] = useState(false);
-  const [localData, setLocalData] = useState(data.faq || { title: "", description: "", items: [] });
-  const [successMsg, setSuccessMsg] = useState("");
-
-  useEffect(() => {
-    setLocalData(data.faq || { title: "", description: "", items: [] });
-  }, [data.faq]);
+  const confirm = useConfirm();
+  // data.faq is loaded from the database by the layout; the fallback is only
+  // for a brand-new install with no FAQ row yet.
+  const [localData, setLocalData] = useState<any>(data.faq || { title: "", description: "", items: [] });
+  const { saving, publish } = useSectionPublisher("faq", "/api/admin/cms/faq", "FAQ");
 
   const handleChange = (key: string, value: any) => {
     const updated = { ...localData, [key]: value };
     setLocalData(updated);
-    if (updateFaq) updateFaq(updated);
+    updateFaq(updated);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSuccessMsg("");
-    try {
-      const res = await fetch("/api/admin/cms/faq", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(localData),
-      });
-
-      if (res.ok) {
-        setSuccessMsg("FAQ saved successfully!");
-        setTimeout(() => setSuccessMsg(""), 3000);
-      } else {
-        alert("Failed to save FAQ.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Error saving FAQ.");
-    } finally {
-      setIsSaving(false);
-    }
+  const items: any[] = Array.isArray(localData.items) ? localData.items : [];
+  const updateItem = (index: number, key: string, value: any) =>
+    handleChange("items", items.map((it, i) => (i === index ? { ...it, [key]: value } : it)));
+  const addItem = () => handleChange("items", [...items, { question: "New question", answer: "New answer" }]);
+  const removeItem = async (index: number) => {
+    const ok = await confirm({
+      title: "Remove this question?",
+      message: "It will be removed from the homepage when you publish.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    handleChange("items", items.filter((_, i) => i !== index));
   };
 
-  const handleUpdateItem = (index: number, key: string, value: any) => {
-    const newItems = [...(localData.items || [])];
-    newItems[index] = { ...newItems[index], [key]: value };
-    handleChange("items", newItems);
-  };
-
-  const handleAddItem = () => {
-    const newItems = [...(localData.items || []), { question: "New Question", answer: "New Answer" }];
-    handleChange("items", newItems);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    const newItems = [...(localData.items || [])];
-    newItems.splice(index, 1);
-    handleChange("items", newItems);
-  };
+  const errors = collect([
+    ["title", required(localData.title, "Title") ?? maxLen(localData.title, 255)],
+    ["description", maxLen(localData.description, 5000)],
+  ]);
+  const itemErrors: Errors[] = items.map((it) =>
+    collect([
+      ["question", required(it.question, "Question")],
+      ["answer", required(it.answer, "Answer")],
+    ])
+  );
+  const errorCount = Object.keys(errors).length + itemErrors.reduce((n, e) => n + Object.keys(e).length, 0);
 
   return (
-    <div className="w-full flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
-      <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex justify-between items-center sticky top-0 z-10">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <HelpCircle className="w-5 h-5 text-emerald-500" />
-            Homepage FAQ Editor
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Manage the frequently asked questions section</p>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-        >
-          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isSaving ? "Saving..." : "Publish Changes"}
-        </button>
-      </div>
+    <SectionEditor
+      sectionKey="faq"
+      icon={HelpCircle}
+      title="FAQ"
+      description="Answers to the questions people ask most."
+      errorCount={errorCount}
+      saving={saving}
+      onPublish={() => publish(localData, localData)}
+    >
+      <EditorCard>
+        <Switch
+          checked={localData.isActive !== false}
+          onChange={(v) => handleChange("isActive", v)}
+          label="Show this section"
+          description="Hidden sections stay saved but don't appear on the homepage."
+        />
+        <Field label="Title" required error={errors.title}>
+          <Input value={localData.title || ""} onChange={(e) => handleChange("title", e.target.value)} placeholder="Frequently asked questions" />
+        </Field>
+        <Field label="Description" error={errors.description}>
+          <Textarea
+            rows={3}
+            value={localData.description || ""}
+            onChange={(e) => handleChange("description", e.target.value)}
+            placeholder="Find answers to common questions…"
+          />
+        </Field>
+      </EditorCard>
 
-      <div className="p-6 overflow-y-auto flex-1 space-y-8">
-        {successMsg && (
-          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2 font-medium">
-            <CheckCircle className="w-5 h-5" />
-            {successMsg}
-          </div>
-        )}
-
-        <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Section Details</h2>
-            <label className="flex items-center gap-3 cursor-pointer group">
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Show Section</span>
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={localData.isActive !== false}
-                  onChange={(e) => handleChange("isActive", e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 transition-colors"></div>
-              </div>
-            </label>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Section Title</label>
-            <input
-              type="text"
-              value={localData.title || ""}
-              onChange={(e) => handleChange("title", e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              placeholder="Frequently Asked Questions"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Description</label>
-            <textarea
-              value={localData.description || ""}
-              onChange={(e) => handleChange("description", e.target.value)}
-              rows={3}
-              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
-              placeholder="Find answers to common questions..."
-            />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">FAQ Items</h2>
-              <p className="text-sm text-slate-500">Add or remove questions</p>
-            </div>
-            <button
-              onClick={handleAddItem}
-              className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+      <div>
+        <h2 className="mb-3 px-1 text-sm font-semibold text-slate-900 dark:text-white">
+          Questions <span className="font-normal text-slate-400">({items.length})</span>
+        </h2>
+        <div className="space-y-4">
+          {items.length === 0 && <EmptyList>No questions yet. Add the first one below.</EmptyList>}
+          {items.map((item, i) => (
+            <RepeaterItem
+              key={i}
+              label={`Question ${i + 1}`}
+              index={i}
+              count={items.length}
+              onMove={(from, to) => handleChange("items", move(items, from, to))}
+              onRemove={() => removeItem(i)}
+              invalid={Object.keys(itemErrors[i]).length > 0}
             >
-              <PlusCircle className="w-4 h-4" />
-              Add Question
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {(localData.items || []).map((item: any, i: number) => (
-              <div key={i} className="flex items-start gap-4 p-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl group">
-                <div className="mt-2 text-slate-400 cursor-grab active:cursor-grabbing hover:text-slate-600 dark:hover:text-slate-200">
-                  <GripVertical className="w-5 h-5" />
-                </div>
-                
-                <div className="flex-1 space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Question</label>
-                    <input
-                      type="text"
-                      value={item.question || ""}
-                      onChange={(e) => handleUpdateItem(i, "question", e.target.value)}
-                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Answer</label>
-                    <textarea
-                      value={item.answer || ""}
-                      onChange={(e) => handleUpdateItem(i, "answer", e.target.value)}
-                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none h-24"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleRemoveItem(i)}
-                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors mt-8"
-                  title="Remove Item"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
-            ))}
-            
-            {(!localData.items || localData.items.length === 0) && (
-              <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-slate-500">
-                No FAQ items found. Click the button above to add one.
-              </div>
-            )}
-          </div>
+              <Field label="Question" required error={itemErrors[i].question}>
+                <Input value={item.question || ""} onChange={(e) => updateItem(i, "question", e.target.value)} />
+              </Field>
+              <Field label="Answer" required error={itemErrors[i].answer}>
+                <Textarea rows={3} value={item.answer || ""} onChange={(e) => updateItem(i, "answer", e.target.value)} />
+              </Field>
+            </RepeaterItem>
+          ))}
+          <AddButton onClick={addItem}>Add question</AddButton>
         </div>
       </div>
-    </div>
+    </SectionEditor>
   );
 }

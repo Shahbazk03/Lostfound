@@ -1,58 +1,63 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, passwordResetTokens } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { passwordResetTokens } from "@/db/schema";
 import { sendPasswordResetOTP } from "@/lib/email";
+import { badRequest } from "@/lib/api-errors";
+import {
+  FIFTEEN_MINUTES,
+  OTP_TTL_MS,
+  checkRateLimits,
+  clearOtpFailures,
+  emailEquals,
+  findUserByEmail,
+  generateOtp,
+  getClientIp,
+  normalizeEmail,
+  readJsonBody,
+} from "../_lib/auth-helpers";
+
+const GENERIC_RESPONSE = {
+  message: "If an account exists, a password reset code has been sent.",
+};
 
 export async function POST(request: Request) {
   try {
-    const { email } = await request.json();
+    const body = await readJsonBody(request);
+    if (!body?.email) return badRequest("Email is required");
+    const email = normalizeEmail(body.email);
+    if (!email) return badRequest("Please enter a valid email address");
 
-    if (!email) {
-      return NextResponse.json(
-        { error: "Email is required" },
-        { status: 400 }
-      );
-    }
+    // Applied before the user lookup so the limit says nothing about whether
+    // the account exists.
+    const limited = checkRateLimits([
+      [`forgot:ip:${getClientIp(request)}`, 10, FIFTEEN_MINUTES],
+      [`otp-send:reset:${email}`, 3, FIFTEEN_MINUTES],
+    ]);
+    if (limited) return limited;
 
-    // 1. Check if user exists
-    const existingUsers = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email));
+    const user = await findUserByEmail(email);
+    if (!user) return NextResponse.json(GENERIC_RESPONSE);
 
-    if (existingUsers.length === 0) {
-      // Return a success message even if the user doesn't exist to prevent email enumeration
-      return NextResponse.json(
-        { message: "If an account exists, a password reset link has been sent." },
-        { status: 200 }
-      );
-    }
+    const otp = generateOtp();
 
-    // 2. Generate a 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // 3. Set expiration (e.g., 10 minutes from now)
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-
-    // 4. Invalidate any existing reset tokens for this email
-    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.email, email));
-
-    // 5. Store the new token
+    // Only the newest code is valid.
+    await db.delete(passwordResetTokens).where(emailEquals(passwordResetTokens.email, email));
     await db.insert(passwordResetTokens).values({
       email,
       token: otp,
-      expiresAt,
+      expiresAt: new Date(Date.now() + OTP_TTL_MS),
     });
+    clearOtpFailures("reset", email);
 
-    // 6. Send the email
-    await sendPasswordResetOTP(email, otp);
+    try {
+      await sendPasswordResetOTP(email, otp);
+    } catch (emailError) {
+      // Don't turn a mail failure into a different response for existing
+      // accounts — that would leak which emails are registered.
+      console.error("Failed to send password reset email:", emailError);
+    }
 
-    return NextResponse.json(
-      { message: "If an account exists, a password reset link has been sent." },
-      { status: 200 }
-    );
+    return NextResponse.json(GENERIC_RESPONSE);
   } catch (error) {
     console.error("Forgot password error:", error);
     return NextResponse.json(

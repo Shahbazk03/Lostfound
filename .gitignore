@@ -2,3 +2,5 @@ node_modules/
 .next/
 .env.local
 .env
+# User uploads (runtime data, not source)
+public/uploads/

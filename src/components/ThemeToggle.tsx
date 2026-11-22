@@ -1,32 +1,31 @@
 "use client";
 
-import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
 
-export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return <div className="w-8 h-8 rounded-md" />;
-  }
+/**
+ * Light/dark switch. Both icons are rendered and CSS shows the right one for
+ * the current `.dark` class, so the server HTML already matches and there is
+ * no placeholder flash. The click reads the *resolved* theme, so it also
+ * works when the theme is "system".
+ */
+export function ThemeToggle({ className }: { className?: string }) {
+  const { resolvedTheme, setTheme } = useTheme();
 
   return (
     <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-      aria-label="Toggle theme"
-    >
-      {theme === "dark" ? (
-        <Sun className="w-4 h-4" />
-      ) : (
-        <Moon className="w-4 h-4" />
+      type="button"
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      aria-label="Toggle dark mode"
+      title="Toggle dark mode"
+      className={cn(
+        "inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
+        className
       )}
+    >
+      <Moon className="h-[18px] w-[18px] dark:hidden" aria-hidden />
+      <Sun className="hidden h-[18px] w-[18px] dark:block" aria-hidden />
     </button>
   );
 }

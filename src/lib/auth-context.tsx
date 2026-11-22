@@ -5,6 +5,8 @@ import {
   useContext,
   useState,
   useEffect,
+  useCallback,
+  useMemo,
   ReactNode,
 } from "react";
 
@@ -15,6 +17,12 @@ interface User {
   role: string;
   avatar?: string | null;
   hasSubscription?: boolean;
+  verified?: boolean;
+}
+
+/** Reads a JSON body without throwing on empty or non-JSON responses. */
+async function readJson(res: Response): Promise<Record<string, any>> {
+  return res.json().catch(() => ({}));
 }
 
 interface AuthContextType {
@@ -38,11 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUser = async () => {
+  // Callbacks are memoized so consumers can safely use them as effect deps.
+  const refreshUser = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me");
       if (res.ok) {
-        const data = await res.json();
+        const data = await readJson(res);
         setUser(data.user);
       } else {
         setUser(null);
@@ -50,14 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setUser(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshUser().finally(() => setLoading(false));
-  }, []);
+  }, [refreshUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -65,15 +74,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (!res.ok) {
-      const data = await res.json();
+      // Includes 429 rate-limit responses, which carry a readable { error }.
+      const data = await readJson(res);
       throw new Error(data.error || "Login failed");
     }
 
-    const data = await res.json();
+    const data = await readJson(res);
     setUser(data.user);
-  };
+  }, []);
 
-  const register = async (
+  const register = useCallback(async (
     email: string,
     password: string,
     name: string,
@@ -86,15 +96,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (!res.ok) {
-      const data = await res.json();
+      // Includes 429 rate-limit responses, which carry a readable { error }.
+      const data = await readJson(res);
       throw new Error(data.error || "Registration failed");
     }
 
-    const data = await res.json();
+    const data = await readJson(res);
     return { requireVerification: data.requireVerification };
-  };
+  }, []);
 
-  const verifyOTP = async (email: string, otp: string) => {
+  const verifyOTP = useCallback(async (email: string, otp: string) => {
     const res = await fetch("/api/auth/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,23 +113,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (!res.ok) {
-      const data = await res.json();
+      // Includes 429 rate-limit responses, which carry a readable { error }.
+      const data = await readJson(res);
       throw new Error(data.error || "Verification failed");
     }
 
-    const data = await res.json();
+    const data = await readJson(res);
     setUser(data.user);
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, loading, login, register, verifyOTP, logout, refreshUser }),
+    [user, loading, login, register, verifyOTP, logout, refreshUser]
+  );
 
   return (
-    <AuthContext.Provider
-      value={{ user, loading, login, register, verifyOTP, logout, refreshUser }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

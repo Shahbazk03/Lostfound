@@ -1,149 +1,93 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Loader2, Save, PlusCircle, Trash2, Grid, GripVertical, CheckCircle } from "lucide-react";
-import { useCMS } from "../CMSProvider";
+import { useState } from "react";
+import { LayoutGrid } from "lucide-react";
+import { useCMS } from "@/app/admin/cms/homepage/CMSProvider";
+import { useConfirm } from "@/components/admin/AdminFeedback";
+import { Checkbox, Field, Input } from "@/components/admin/ui/Form";
+import { AddButton, EmptyList, RepeaterItem, SectionEditor, useSectionPublisher } from "../_components/SectionEditor";
+import { collect, maxLen, move, required, type Errors } from "../_components/validation";
 
 export default function CategoriesPage() {
   const { data, updateCategories } = useCMS();
-  const [isSaving, setIsSaving] = useState(false);
+  const confirm = useConfirm();
   const [localList, setLocalList] = useState<any[]>(data.categoriesList || []);
-  const [successMsg, setSuccessMsg] = useState("");
+  const { saving, publish } = useSectionPublisher("categoriesList", "/api/admin/cms/categories", "categories");
 
-  useEffect(() => {
-    setLocalList(data.categoriesList || []);
-  }, [data.categoriesList]);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSuccessMsg("");
-    try {
-      const res = await fetch("/api/admin/cms/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categories: localList }),
-      });
-
-      if (res.ok) {
-        setSuccessMsg("Categories saved successfully!");
-        setTimeout(() => setSuccessMsg(""), 3000);
-      } else {
-        alert("Failed to save categories.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Error saving categories.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleUpdate = (index: number, key: string, value: any) => {
-    const newList = [...localList];
-    newList[index] = { ...newList[index], [key]: value };
+  const commit = (newList: any[]) => {
     setLocalList(newList);
     updateCategories(newList);
   };
 
-  const handleAdd = () => {
-    const newList = [
-      ...localList,
-      { name: "New Category", icon: "Package", isActive: true }
-    ];
-    setLocalList(newList);
-    updateCategories(newList);
+  const handleUpdate = (index: number, key: string, value: any) =>
+    commit(localList.map((c, i) => (i === index ? { ...c, [key]: value } : c)));
+
+  const handleAdd = () => commit([...localList, { name: "New category", icon: "Package", isActive: true }]);
+
+  const handleRemove = async (index: number) => {
+    const ok = await confirm({
+      title: "Remove this category?",
+      message: "It will be removed from the homepage when you publish.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
+    commit(localList.filter((_, i) => i !== index));
   };
 
-  const handleRemove = (index: number) => {
-    const newList = [...localList];
-    newList.splice(index, 1);
-    setLocalList(newList);
-    updateCategories(newList);
-  };
+  const rowErrors: Errors[] = localList.map((c) =>
+    collect([
+      ["name", required(c.name, "Name") ?? maxLen(c.name, 100)],
+      ["icon", maxLen(c.icon, 200)],
+    ])
+  );
+  const errorCount = rowErrors.reduce((n, e) => n + Object.keys(e).length, 0);
 
   return (
-    <div className="w-full flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
-      <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex justify-between items-center sticky top-0 z-10">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Grid className="w-5 h-5 text-emerald-500" />
-            Categories Editor
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Manage categories displayed on the homepage</p>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+    <SectionEditor
+      sectionKey="categoriesList"
+      icon={LayoutGrid}
+      title="Categories"
+      description="The categories visitors can jump into from the homepage."
+      errorCount={errorCount}
+      saving={saving}
+      onPublish={() => publish({ categories: localList }, localList)}
+    >
+      {localList.length === 0 && <EmptyList>No categories yet.</EmptyList>}
+      {localList.map((cat, i) => (
+        <RepeaterItem
+          key={cat.id ?? `new-${i}`}
+          label={cat.name?.trim() || `Category ${i + 1}`}
+          index={i}
+          count={localList.length}
+          onMove={(from, to) => commit(move(localList, from, to))}
+          onRemove={() => handleRemove(i)}
+          invalid={Object.keys(rowErrors[i]).length > 0}
+          muted={cat.isActive === false}
         >
-          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isSaving ? "Saving..." : "Publish Changes"}
-        </button>
-      </div>
-
-      <div className="p-6 overflow-y-auto flex-1 space-y-6">
-        {successMsg && (
-          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-4 py-3 rounded-xl flex items-center gap-2 font-medium">
-            <CheckCircle className="w-5 h-5" />
-            {successMsg}
-          </div>
-        )}
-
-        {localList.map((cat, i) => (
-          <div key={i} className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex items-start gap-4">
-            <div className="mt-2 text-slate-400 cursor-grab">
-              <GripVertical className="w-5 h-5" />
-            </div>
-            <div className="flex-1 grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Category Name</label>
-                <input
-                  type="text"
-                  value={cat.name || ""}
-                  onChange={(e) => handleUpdate(i, "name", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="e.g. Phones"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Lucide Icon Name</label>
-                <input
-                  type="text"
-                  value={cat.icon || ""}
-                  onChange={(e) => handleUpdate(i, "icon", e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Smartphone"
-                />
-              </div>
-              <div className="col-span-2 flex items-center pt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={cat.isActive !== false}
-                    onChange={(e) => handleUpdate(i, "isActive", e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 bg-slate-100 border-slate-300"
-                  />
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Active (Visible on Homepage)</span>
-                </label>
-              </div>
-            </div>
-            <button
-              onClick={() => handleRemove(i)}
-              className="p-2.5 bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-xl transition-colors"
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Name" required error={rowErrors[i].name}>
+              <Input value={cat.name || ""} onChange={(e) => handleUpdate(i, "name", e.target.value)} placeholder="Phones" />
+            </Field>
+            <Field
+              label="Icon"
+              error={rowErrors[i].icon}
+              hint={
+                <>
+                  A{" "}
+                  <a href="https://lucide.dev/icons" target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">
+                    Lucide icon
+                  </a>{" "}
+                  name, e.g. Smartphone
+                </>
+              }
             >
-              <Trash2 className="w-5 h-5" />
-            </button>
+              <Input value={cat.icon || ""} onChange={(e) => handleUpdate(i, "icon", e.target.value)} placeholder="Smartphone" />
+            </Field>
           </div>
-        ))}
-
-        <button
-          onClick={handleAdd}
-          className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl flex items-center justify-center gap-2 text-slate-500 hover:text-emerald-500 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors font-semibold"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Add Category
-        </button>
-      </div>
-    </div>
+          <Checkbox checked={cat.isActive !== false} onChange={(v) => handleUpdate(i, "isActive", v)} label="Visible on homepage" />
+        </RepeaterItem>
+      ))}
+      <AddButton onClick={handleAdd}>Add category</AddButton>
+    </SectionEditor>
   );
 }

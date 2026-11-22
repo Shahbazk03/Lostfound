@@ -1,161 +1,294 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { Search, SearchX, CheckCircle, XCircle } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { Banknote, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { adminFetch, errorMessage } from "@/components/admin/admin-api";
+import { useAdminLoader } from "@/components/admin/useAdminLoader";
+import { useConfirm, useToast } from "@/components/admin/AdminFeedback";
+import { useAdminShell } from "@/components/admin/AdminShell";
+import { Button } from "@/components/admin/ui/Button";
+import { DataTable, type Column } from "@/components/admin/ui/DataTable";
+import { FilterTabs } from "@/components/admin/ui/FilterTabs";
+import type { MenuItem } from "@/components/admin/ui/Menu";
+import { PageContainer, PageHeader } from "@/components/admin/ui/PageHeader";
+import { StatCard } from "@/components/admin/ui/StatCard";
+import { StatusBadge } from "@/components/admin/ui/StatusBadge";
 
 interface AdminWithdrawal {
   id: number;
   amount: number;
-  currency: string;
+  currency?: string | null;
   status: string;
-  bankAccount: string;
-  userEmail?: string;
-  userName?: string;
   createdAt: string;
+  updatedAt?: string | null;
+  // The list endpoint has returned the user both flattened and nested;
+  // accept either shape.
+  userEmail?: string | null;
+  userName?: string | null;
+  user?: { name?: string | null; email?: string | null } | null;
+}
+
+// withdrawal_status enum: pending | completed | rejected (there is no "approved").
+type StatusFilter = "pending" | "completed" | "rejected" | "all";
+
+const userName = (w: AdminWithdrawal) => w.userName ?? w.user?.name ?? "";
+const userEmail = (w: AdminWithdrawal) => w.userEmail ?? w.user?.email ?? "";
+const reqId = (w: AdminWithdrawal) => `REQ-${w.id.toString().padStart(4, "0")}`;
+
+function safeCurrency(amount: number, currency?: string | null) {
+  try {
+    return formatCurrency(amount, (currency || "USD").toUpperCase());
+  } catch {
+    return formatCurrency(amount, "USD");
+  }
 }
 
 export default function WithdrawalsPage() {
-  const { user } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { refreshCounts } = useAdminShell();
   const [withdrawals, setWithdrawals] = useState<AdminWithdrawal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
 
-  const fetchWithdrawals = async () => {
+  const loadWithdrawals = useCallback(async () => {
+    const data = await adminFetch<AdminWithdrawal[] | { withdrawals?: AdminWithdrawal[] }>(
+      "/api/admin/withdrawals",
+      {},
+      "Failed to load withdrawals"
+    );
+    setWithdrawals(Array.isArray(data) ? data : data?.withdrawals ?? []);
+  }, []);
+  // fetchWithdrawals() re-runs the load quietly (after a change); reload() shows the skeleton.
+  const { loading, error: loadError, reload, refresh: fetchWithdrawals } = useAdminLoader(loadWithdrawals, "Failed to load withdrawals");
+
+  const handleUpdateWithdrawalStatus = async (w: AdminWithdrawal, status: "completed" | "rejected") => {
+    const approving = status === "completed";
+    const ok = await confirm({
+      title: approving ? "Approve this withdrawal?" : "Reject this withdrawal?",
+      message: `${safeCurrency(w.amount, w.currency)} requested by ${userName(w) || userEmail(w) || "this user"}.${
+        approving ? " Only confirm once the money has been sent to the user." : ""
+      }`,
+      confirmLabel: approving ? "Mark as paid" : "Reject",
+      destructive: !approving,
+    });
+    if (!ok) return;
+    setUpdatingId(w.id);
     try {
-      const res = await fetch("/api/admin/withdrawals");
-      const data = await res.json();
-      if (res.ok) setWithdrawals(data.withdrawals || data || []);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load withdrawals");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user?.role === "admin") fetchWithdrawals();
-  }, [user]);
-
-  const handleUpdateWithdrawalStatus = async (id: number, status: string) => {
-    try {
-      const res = await fetch(`/api/admin/withdrawals/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error("Failed to update status");
+      await adminFetch(
+        `/api/admin/withdrawals/${w.id}`,
+        { method: "PATCH", json: { status } },
+        "Failed to update withdrawal"
+      );
+      setWithdrawals((prev) =>
+        prev.map((x) => (x.id === w.id ? { ...x, status, updatedAt: new Date().toISOString() } : x))
+      );
+      toast.success(approving ? "Withdrawal marked as paid" : "Withdrawal rejected");
       fetchWithdrawals();
-    } catch (err: any) {
-      alert(err.message);
+      refreshCounts();
+    } catch (err) {
+      toast.error(errorMessage(err, "Failed to update withdrawal"));
+    } finally {
+      setUpdatingId(null);
     }
   };
 
-  const filteredWithdrawals = withdrawals.filter(w => 
-    w.userName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    w.userEmail?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    w.bankAccount?.toLowerCase().includes(searchQuery.toLowerCase())
+  const counts = useMemo(
+    () => ({
+      all: withdrawals.length,
+      pending: withdrawals.filter((w) => w.status === "pending").length,
+      completed: withdrawals.filter((w) => w.status === "completed").length,
+      rejected: withdrawals.filter((w) => w.status === "rejected").length,
+    }),
+    [withdrawals]
   );
 
-  return (
-    <div className="p-8 max-w-7xl mx-auto w-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+  // Totals per currency; never summed across currencies.
+  const totals = useMemo(() => {
+    const by = (status: string) => {
+      const map = new Map<string, number>();
+      for (const w of withdrawals) {
+        if (w.status !== status) continue;
+        const cur = (w.currency || "USD").toUpperCase();
+        map.set(cur, (map.get(cur) ?? 0) + w.amount);
+      }
+      return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+    };
+    return { pending: by("pending"), completed: by("completed") };
+  }, [withdrawals]);
+
+  const rows = useMemo(
+    () => (statusFilter === "all" ? withdrawals : withdrawals.filter((w) => w.status === statusFilter)),
+    [withdrawals, statusFilter]
+  );
+
+  const moneyList = (list: [string, number][]) =>
+    list.length === 0 ? safeCurrency(0, "USD") : list.map(([cur, amt]) => safeCurrency(amt, cur)).join(" · ");
+
+  const columns: Column<AdminWithdrawal>[] = [
+    {
+      id: "id",
+      header: "Request",
+      sortValue: (w) => w.id,
+      cell: (w) => (
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Withdrawals Management</h1>
-          <p className="text-slate-500">Approve or reject withdrawal requests from users.</p>
+          <p className="font-mono text-sm font-semibold text-slate-900 dark:text-white">{reqId(w)}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400" title={formatDateTime(w.createdAt)}>
+            Requested {formatDate(w.createdAt)}
+          </p>
         </div>
+      ),
+    },
+    {
+      id: "user",
+      header: "User",
+      sortValue: (w) => (userName(w) || userEmail(w)).toLowerCase(),
+      cell: (w) => (
+        <div className="min-w-0">
+          <p className="truncate font-medium text-slate-900 dark:text-white">{userName(w) || "Unknown"}</p>
+          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{userEmail(w)}</p>
+        </div>
+      ),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      sortValue: (w) => w.amount,
+      cell: (w) => <span className="font-semibold tabular-nums text-slate-900 dark:text-white">{safeCurrency(w.amount, w.currency)}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      sortValue: (w) => w.status,
+      cell: (w) => <StatusBadge kind="withdrawal" status={w.status} />,
+    },
+    {
+      id: "createdAt",
+      header: "Updated",
+      sortValue: (w) => new Date(w.updatedAt || w.createdAt).getTime(),
+      cell: (w) => (
+        <span className="whitespace-nowrap text-slate-500 dark:text-slate-400">{formatDate(w.updatedAt || w.createdAt)}</span>
+      ),
+    },
+  ];
+
+  const rowActions = (w: AdminWithdrawal): MenuItem[] =>
+    w.status === "pending"
+      ? [
+          {
+            label: "Mark as paid",
+            icon: CheckCircle2,
+            onSelect: () => handleUpdateWithdrawalStatus(w, "completed"),
+            disabled: updatingId === w.id,
+          },
+          {
+            label: "Reject",
+            icon: XCircle,
+            danger: true,
+            onSelect: () => handleUpdateWithdrawalStatus(w, "rejected"),
+            disabled: updatingId === w.id,
+          },
+        ]
+      : [];
+
+  const inlineActions = (w: AdminWithdrawal) =>
+    w.status === "pending" ? (
+      <div className="hidden items-center gap-1.5 lg:flex">
+        <Button
+          size="sm"
+          variant="primary"
+          loading={updatingId === w.id}
+          onClick={() => handleUpdateWithdrawalStatus(w, "completed")}
+        >
+          {updatingId !== w.id && <CheckCircle2 className="h-3.5 w-3.5" />}
+          Mark paid
+        </Button>
+        <Button
+          size="sm"
+          variant="dangerSoft"
+          disabled={updatingId === w.id}
+          onClick={() => handleUpdateWithdrawalStatus(w, "rejected")}
+        >
+          Reject
+        </Button>
+      </div>
+    ) : (
+      <span className="hidden pr-2 text-xs text-slate-400 lg:inline dark:text-slate-500">Processed</span>
+    );
+
+  return (
+    <PageContainer>
+      <PageHeader
+        title="Withdrawals"
+        description="Pay out users' earnings. Mark a request as paid once the transfer has been sent, or reject it."
+      />
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Awaiting payout"
+          icon={Clock}
+          tone="amber"
+          value={loading ? "—" : counts.pending.toLocaleString()}
+          sub={loading ? undefined : moneyList(totals.pending)}
+        />
+        <StatCard
+          label="Paid out"
+          icon={Banknote}
+          tone="emerald"
+          value={loading ? "—" : counts.completed.toLocaleString()}
+          sub={loading ? undefined : moneyList(totals.completed)}
+        />
+        <StatCard label="Rejected" icon={XCircle} tone="rose" value={loading ? "—" : counts.rejected.toLocaleString()} />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden mb-8">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <div className="relative w-full max-w-md">
-            <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
-              placeholder="Search by user or bank details..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-          <div className="text-sm font-medium text-slate-500">
-            Total Requests: {withdrawals.length}
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="p-12 text-center text-slate-500">Loading withdrawals...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-950/50 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
-                  <th className="px-6 py-4">Request ID</th>
-                  <th className="px-6 py-4">User</th>
-                  <th className="px-6 py-4">Bank Account</th>
-                  <th className="px-6 py-4">Amount</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                {filteredWithdrawals.map((w) => (
-                  <tr key={w.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900 dark:text-white">REQ-{w.id.toString().padStart(4, '0')}</div>
-                      <div className="text-xs text-slate-500">{formatDate(w.createdAt)}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-slate-900 dark:text-white">{w.userName || "Unknown"}</div>
-                      <div className="text-xs text-slate-500">{w.userEmail}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-mono text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 inline-block">
-                        {w.bankAccount || "N/A"}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-bold text-amber-600 dark:text-amber-500 text-lg">
-                        {formatCurrency(w.amount, w.currency)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold capitalize ${w.status === "completed" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30" : w.status === "pending" ? "bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30" : "bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30"}`}>
-                        {w.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {w.status === "pending" ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => handleUpdateWithdrawalStatus(w.id, "completed")} className="px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" /> Approve
-                          </button>
-                          <button onClick={() => handleUpdateWithdrawalStatus(w.id, "failed")} className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1">
-                            <XCircle className="w-4 h-4" /> Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 text-sm italic">Processed</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {filteredWithdrawals.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-12 text-center flex flex-col items-center justify-center">
-                      <SearchX className="w-12 h-12 text-slate-300 mb-4 mx-auto" />
-                      <div className="text-slate-500 text-lg">No withdrawal requests found.</div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
+      <DataTable
+        caption="Withdrawal requests"
+        rows={rows}
+        columns={columns}
+        getRowId={(w) => w.id}
+        loading={loading}
+        error={loadError}
+        onRetry={reload}
+        search={{
+          placeholder: "Search by user or request ID…",
+          match: (w, q) => [userName(w), userEmail(w), reqId(w)].some((v) => v.toLowerCase().includes(q)),
+        }}
+        toolbar={
+          <FilterTabs<StatusFilter>
+            label="Filter by status"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: "pending", label: "Pending", count: counts.pending },
+              { value: "completed", label: "Completed", count: counts.completed },
+              { value: "rejected", label: "Rejected", count: counts.rejected },
+              { value: "all", label: "All", count: counts.all },
+            ]}
+          />
+        }
+        resetKey={statusFilter}
+        initialSort={{ id: "createdAt", dir: statusFilter === "pending" ? "asc" : "desc" }}
+        rowActions={rowActions}
+        inlineActions={inlineActions}
+        empty={{
+          icon: Banknote,
+          title:
+            statusFilter === "pending"
+              ? "No pending requests"
+              : statusFilter === "all"
+                ? "No withdrawal requests yet"
+                : `No ${statusFilter} requests`,
+          description: statusFilter === "pending" ? "You're all caught up. New payout requests will show here." : undefined,
+          action:
+            statusFilter !== "all" && counts.all > 0 ? (
+              <Button size="sm" onClick={() => setStatusFilter("all")}>
+                Show all requests
+              </Button>
+            ) : undefined,
+        }}
+      />
+    </PageContainer>
   );
 }
